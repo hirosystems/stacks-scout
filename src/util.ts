@@ -105,8 +105,17 @@ export function timeout(ms: number, abort?: AbortSignal): Promise<void> {
   });
 }
 
-export function add(a: number, b: number) {
-  const result = a + b;
-  logger.info(`Add result: ${result}`);
-  return result;
-}
+export const INT = {
+  MAX_U8: 2 ** 8 - 1,
+  MAX_U16: 2 ** 16 - 1,
+  MAX_U32: 2 ** 32 - 1,
+  MAX_U64: 2n ** 64n - 1n,
+  MAX_I8: 2 ** 7 - 1,
+  MAX_I16: 2 ** 15 - 1,
+  MAX_I32: 2 ** 31 - 1,
+  MAX_I64: 2n ** 63n - 1n,
+  MIN_I8: -(2 ** 7),
+  MIN_I16: -(2 ** 15),
+  MIN_I32: -(2 ** 31),
+  MIN_I64: -(2n ** 63n),
+} as const;

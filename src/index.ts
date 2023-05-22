@@ -1,4 +1,3 @@
-import * as net from 'net';
 import { getBitcoinChainInfo, waitForBtcRestResponsive } from './bitcoin-net';
 import { startControlPlanServer } from './p2p-control-plane-server';
 import { startDataPlanServer } from './p2p-data-plane-server';

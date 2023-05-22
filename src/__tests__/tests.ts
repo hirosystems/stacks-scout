@@ -1,10 +1,5 @@
 import { PeerAddress } from '../peer-handler';
-import { add, timeout } from '../util';
-
-it('adds', () => {
-  const result = add(1, 2);
-  expect(result).toBe(3);
-});
+import { timeout } from '../util';
 
 it('socket address', () => {
   const addr1 = new PeerAddress('1.2.3.4', 1234);
