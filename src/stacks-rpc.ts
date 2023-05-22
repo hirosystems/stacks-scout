@@ -1,13 +1,37 @@
-import { ENV } from './util';
+import { ENV, logger, timeout } from './util';
 
-export const getStacksNodeRpcUrl = (path: string) =>
-  new URL(
-    path,
-    `http://${ENV.STACKS_NODE_RPC_HOST}:${ENV.STACKS_NODE_RPC_PORT}`
-  );
+function getDefaultStacksNodeRpcEndpoint(): string {
+  return `http://${ENV.STACKS_NODE_RPC_HOST}:${ENV.STACKS_NODE_RPC_PORT}`;
+}
 
-export async function getStacksNodeInfo(): Promise<any> {
-  const url = getStacksNodeRpcUrl('/v2/info');
+export function getStacksNodeRpcUrl(
+  path: string,
+  hostname = getDefaultStacksNodeRpcEndpoint()
+): URL {
+  return new URL(path, hostname);
+}
+
+export async function getStacksNodeInfo(
+  hostname = getDefaultStacksNodeRpcEndpoint()
+): Promise<any> {
+  const url = getStacksNodeRpcUrl('/v2/info', hostname);
   const res = await fetch(url);
   return await res.json();
+}
+
+export async function waitForRpcResponsive(
+  hostname = getDefaultStacksNodeRpcEndpoint(),
+  abort?: AbortSignal,
+  retryInternalMs = 500
+): Promise<void> {
+  while (!abort?.throwIfAborted() ?? true) {
+    try {
+      await getStacksNodeInfo(hostname);
+      logger.info(`Stacks node RPC is responsive at '${hostname}'`);
+      return;
+    } catch (_error) {
+      logger.info(`Waiting for responsive Stacks node RPC at '${hostname}' ..`);
+      await timeout(retryInternalMs, abort);
+    }
+  }
 }

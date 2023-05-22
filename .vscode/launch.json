@@ -26,8 +26,8 @@
       "cwd": "${workspaceRoot}",
       "internalConsoleOptions": "openOnSessionStart",
       "skipFiles": [
-        "<node_internals>/**",
-        "node_modules/**"
+        // "<node_internals>/**",
+        // "node_modules/**"
       ],
       "preLaunchTask": "docker-compose-up",
       "postDebugTask": "docker-compose-down",
