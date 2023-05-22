@@ -327,6 +327,9 @@ export class BurnchainHeaderHash implements Encodeable {
   readonly hash: string;
 
   constructor(hash: string) {
+    if (hash.length !== 64) {
+      throw new Error('BurnchainHeaderHash must be a 32 byte hex string');
+    }
     this.hash = hash;
   }
   static decode(source: ResizableByteStream): BurnchainHeaderHash {
@@ -347,6 +350,9 @@ export class MessageSignature implements Encodeable {
   readonly signature: string;
 
   constructor(signature: string) {
+    if (signature.length !== 130) {
+      throw new Error('MessageSignature must be a 65 byte hex string');
+    }
     this.signature = signature;
   }
   static decode(source: ResizableByteStream): MessageSignature {
@@ -368,10 +374,11 @@ export class RelayData implements Encodeable {
     this.seq = seq;
   }
   static decode(source: ResizableByteStream): RelayData {
-    throw new Error('Method not implemented.');
+    return new RelayData(NeighborAddress.decode(source), source.readUint32());
   }
   encode(target: ResizableByteStream): void {
-    throw new Error('Method not implemented.');
+    this.peer.encode(target);
+    target.writeUint32(this.seq);
   }
 }
 
@@ -412,6 +419,9 @@ export class NeighborAddress implements Encodeable {
   readonly public_key_hash: string;
 
   constructor(addrbytes: PeerAddress, port: number, public_key_hash: string) {
+    if (public_key_hash.length !== 40) {
+      throw new Error('public_key_hash must be a 20 byte hex string');
+    }
     this.addrbytes = addrbytes;
     this.port = port;
     this.public_key_hash = public_key_hash;
@@ -438,7 +448,7 @@ export class PeerAddress implements Encodeable {
 
   constructor(ip_address: string) {
     if (ip_address.length !== 32) {
-      throw new Error('ip_address must be a 32 character hex string for now');
+      throw new Error('ip_address must be a 16 byte hex string for now');
     }
     this.ip_address = ip_address;
   }
@@ -484,7 +494,7 @@ export class HandshakeData implements StacksMessageTypedContainer, Encodeable {
     data_url: string
   ) {
     if (node_public_key.length !== 66) {
-      throw new Error('node_public_key must be a 66 character hex string');
+      throw new Error('node_public_key must be a 33 byte hex string');
     }
     this.addrbytes = addrbytes;
     this.port = port;

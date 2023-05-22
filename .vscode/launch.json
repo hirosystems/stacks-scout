@@ -57,5 +57,31 @@
       "internalConsoleOptions": "neverOpen",
       "sourceMaps": true,
     },
+    {
+      "name": "Jest - Current file",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "${workspaceRoot}/node_modules/.bin/jest",
+      "runtimeVersion": "20",
+      "nodeVersionHint": 20,
+      "killBehavior": "polite",
+      "args": [
+        "--runInBand",
+        "--no-cache",
+        "--config",
+        "${workspaceRoot}/jest.config.js",
+        "--testPathPattern",
+        "${fileBasenameNoExtension}"
+      ],
+      "cwd": "${workspaceRoot}",
+      "skipFiles": [
+        "<node_internals>/**",
+        "**/node_modules/**"
+      ],
+      // "console": "integratedTerminal",
+      "outputCapture": "std",
+      "internalConsoleOptions": "neverOpen",
+      "sourceMaps": true,
+    },
   ]
 }
