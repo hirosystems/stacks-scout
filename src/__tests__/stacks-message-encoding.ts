@@ -1,7 +1,9 @@
 import { ResizableByteStream } from '../resizable-byte-stream';
 import {
   BurnchainHeaderHash,
+  HandshakeAccept,
   HandshakeData,
+  HandshakeReject,
   MessageSignature,
   NeighborAddress,
   PeerAddress,
@@ -44,11 +46,39 @@ describe('p2p StacksMessage encoding', () => {
 
     const byteStream = new ResizableByteStream();
     envelope.encode(byteStream);
-    const encodedLength = byteStream.position;
-    expect(encodedLength).toBeGreaterThan(1);
     byteStream.seek(0);
 
     const decodedEnvelope = StacksMessageEnvelope.decode(byteStream);
     expect(decodedEnvelope).toEqual(envelope);
+  });
+
+  it('should encode and decode handshake accept payload', () => {
+    const handshake = new HandshakeData(
+      new PeerAddress('0d'.repeat(16)),
+      5000,
+      0,
+      '0c'.repeat(33),
+      50n,
+      'http://test.local'
+    );
+    const handshakeAccept = new HandshakeAccept(handshake, 1234);
+
+    const byteStream = new ResizableByteStream();
+    handshakeAccept.encode(byteStream);
+    byteStream.seek(0);
+
+    const decodedHandshakeAccept = HandshakeAccept.decode(byteStream);
+    expect(decodedHandshakeAccept).toEqual(handshakeAccept);
+  });
+
+  it('should encode and decode handshake reject payload', () => {
+    const handshakeReject = new HandshakeReject();
+
+    const byteStream = new ResizableByteStream();
+    handshakeReject.encode(byteStream);
+    byteStream.seek(0);
+
+    const decodedHandshakeReject = HandshakeReject.decode(byteStream);
+    expect(decodedHandshakeReject).toEqual(handshakeReject);
   });
 });

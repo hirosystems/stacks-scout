@@ -14,36 +14,34 @@ const enum INT_SIZE {
 export class ResizableByteStream {
   readonly arrayBuffer: ArrayBuffer;
   private dataView: DataView;
-  readonly maxSize: number;
   private cursor = 0;
 
   constructor(initialSize = DEFAULT_INITIAL_SIZE, maxSize = DEFAULT_MAX_SIZE) {
-    this.maxSize = maxSize;
     // @ts-expect-error - maxByteLength is not in the types yet
     this.arrayBuffer = new ArrayBuffer(initialSize, { maxByteLength: maxSize });
     this.dataView = new DataView(this.arrayBuffer);
   }
 
   private growToFit(byteSize: number) {
+    const requiredSize = this.cursor + byteSize;
     // Check if buffer is already able to fit the bytes
-    if (this.cursor + byteSize <= this.arrayBuffer.byteLength) {
+    if (requiredSize <= this.arrayBuffer.byteLength) {
       return;
     }
 
-    // Check if buffer can be resized to fit the bytes
-    if (this.cursor + byteSize > this.maxSize) {
-      throw new Error('ResizableByteStream exceeded maximum size');
+    // Double the size each time we need to grow
+    let nextSize = this.arrayBuffer.byteLength * 2;
+    if (nextSize < requiredSize) {
+      nextSize = requiredSize;
     }
 
-    const nextSize = Math.min(
-      this.maxSize,
-      Math.max(this.arrayBuffer.byteLength * 2, this.cursor + byteSize)
-    );
-    if (nextSize > this.maxSize) {
-      throw new Error('ResizableByteStream already at maximum size');
-    }
     // @ts-expect-error - resize is not in the types yet
     this.arrayBuffer.resize(nextSize);
+  }
+
+  get maxByteSize() {
+    // @ts-expect-error - maxByteLength is not in the types yet
+    return this.arrayBuffer.maxByteLength;
   }
 
   get position() {
@@ -117,56 +115,92 @@ export class ResizableByteStream {
     this.writeBytes(Buffer.from(str, 'ascii'));
   }
 
+  peekUint8() {
+    return this.dataView.getUint8(this.cursor);
+  }
+
   readUint8() {
-    const value = this.dataView.getUint8(this.cursor);
+    const value = this.peekUint8();
     this.cursor += INT_SIZE.I8;
     return value;
+  }
+
+  peekInt8() {
+    return this.dataView.getInt8(this.cursor);
   }
 
   readInt8() {
-    const value = this.dataView.getInt8(this.cursor);
+    const value = this.peekInt8();
     this.cursor += INT_SIZE.I8;
     return value;
   }
 
+  peekUint16(littleEndian?: boolean) {
+    return this.dataView.getUint16(this.cursor, littleEndian);
+  }
+
   readUint16(littleEndian?: boolean) {
-    const value = this.dataView.getUint16(this.cursor, littleEndian);
+    const value = this.peekUint16(littleEndian);
     this.cursor += INT_SIZE.I16;
     return value;
+  }
+
+  peekInt16(littleEndian?: boolean) {
+    return this.dataView.getInt16(this.cursor, littleEndian);
   }
 
   readInt16(littleEndian?: boolean) {
-    const value = this.dataView.getInt16(this.cursor, littleEndian);
+    const value = this.peekInt16(littleEndian);
     this.cursor += INT_SIZE.I16;
     return value;
   }
 
+  peekUint32(littleEndian?: boolean) {
+    return this.dataView.getUint32(this.cursor, littleEndian);
+  }
+
   readUint32(littleEndian?: boolean) {
-    const value = this.dataView.getUint32(this.cursor, littleEndian);
+    const value = this.peekUint32(littleEndian);
     this.cursor += INT_SIZE.I32;
     return value;
+  }
+
+  peekInt32(littleEndian?: boolean) {
+    return this.dataView.getInt32(this.cursor, littleEndian);
   }
 
   readInt32(littleEndian?: boolean) {
-    const value = this.dataView.getInt32(this.cursor, littleEndian);
+    const value = this.peekInt32(littleEndian);
     this.cursor += INT_SIZE.I32;
     return value;
   }
 
+  peekUint64(littleEndian?: boolean) {
+    return this.dataView.getBigUint64(this.cursor, littleEndian);
+  }
+
   readUint64(littleEndian?: boolean) {
-    const value = this.dataView.getBigUint64(this.cursor, littleEndian);
+    const value = this.peekUint64(littleEndian);
     this.cursor += INT_SIZE.I64;
     return value;
+  }
+
+  peekInt64(littleEndian?: boolean) {
+    return this.dataView.getBigInt64(this.cursor, littleEndian);
   }
 
   readInt64(littleEndian?: boolean) {
-    const value = this.dataView.getBigInt64(this.cursor, littleEndian);
+    const value = this.peekInt64(littleEndian);
     this.cursor += INT_SIZE.I64;
     return value;
   }
 
+  peekBytes(length: number): Uint8Array {
+    return new Uint8Array(this.arrayBuffer, this.cursor, length);
+  }
+
   readBytes(length: number): Uint8Array {
-    const value = new Uint8Array(this.arrayBuffer, this.cursor, length);
+    const value = this.peekBytes(length);
     this.cursor += length;
     return value;
   }

@@ -155,7 +155,7 @@ export abstract class StacksMessageTypedContainer implements Encodeable {
   abstract encode(target: ResizableByteStream): void;
   abstract readonly containerType: StacksMessageContainerTypeID;
   static decode(source: ResizableByteStream): StacksMessageTypedContainer {
-    const typeID: StacksMessageContainerTypeID = source.readUint8();
+    const typeID: StacksMessageContainerTypeID = source.peekUint8();
     switch (typeID) {
       case StacksMessageContainerTypeID.Handshake:
         return HandshakeData.decode(source);
@@ -461,7 +461,8 @@ export class PeerAddress implements Encodeable {
 }
 
 export class HandshakeData implements StacksMessageTypedContainer, Encodeable {
-  readonly containerType = StacksMessageContainerTypeID.Handshake;
+  static readonly containerType = StacksMessageContainerTypeID.Handshake;
+  readonly containerType = HandshakeData.containerType;
 
   /** Address of the peer sending the handshake */
   readonly addrbytes: PeerAddress;
@@ -504,6 +505,9 @@ export class HandshakeData implements StacksMessageTypedContainer, Encodeable {
     this.data_url = data_url;
   }
   static decode(source: ResizableByteStream): HandshakeData {
+    if (source.readUint8() !== this.containerType) {
+      throw new Error('Invalid container type');
+    }
     return new HandshakeData(
       PeerAddress.decode(source),
       source.readUint16(),
@@ -528,7 +532,8 @@ export class HandshakeData implements StacksMessageTypedContainer, Encodeable {
 export class HandshakeAccept
   implements StacksMessageTypedContainer, Encodeable
 {
-  readonly containerType = StacksMessageContainerTypeID.HandshakeAccept;
+  static readonly containerType = StacksMessageContainerTypeID.HandshakeAccept;
+  readonly containerType = HandshakeAccept.containerType;
 
   /** The remote peer's handshake data */
   readonly handshake: HandshakeData;
@@ -543,6 +548,9 @@ export class HandshakeAccept
     this.heartbeat_interval = heartbeat_interval;
   }
   static decode(source: ResizableByteStream): HandshakeAccept {
+    if (source.readUint8() !== this.containerType) {
+      throw new Error('Invalid container type');
+    }
     return new HandshakeAccept(
       HandshakeData.decode(source),
       source.readUint32()
@@ -558,9 +566,13 @@ export class HandshakeAccept
 export class HandshakeReject
   implements StacksMessageTypedContainer, Encodeable
 {
-  readonly containerType = StacksMessageContainerTypeID.HandshakeReject;
+  static readonly containerType = StacksMessageContainerTypeID.HandshakeReject;
+  readonly containerType = HandshakeReject.containerType;
 
   static decode(source: ResizableByteStream): HandshakeReject {
+    if (source.readUint8() !== this.containerType) {
+      throw new Error('Invalid container type');
+    }
     return new HandshakeReject();
   }
   encode(target: ResizableByteStream): void {
