@@ -6,11 +6,11 @@ import {
 } from './bitcoin-net';
 import { startControlPlanServer } from './p2p-control-plane-server';
 import { startDataPlanServer } from './p2p-data-plane-server';
-import { PeerAddress, StacksPeer } from './peer-handler';
+import { PeerEndpoint, StacksPeer } from './peer-handler';
 import { setupShutdownHandler } from './shutdown';
 import { getDefaultStacksNodePeerAddress } from './stacks-p2p';
 import { waitForRpcResponsive } from './stacks-rpc';
-import { logger } from './util';
+import { logger, timeout } from './util';
 
 async function init() {
   setupShutdownHandler();
@@ -38,6 +38,7 @@ async function init() {
     });
   */
 
+  await timeout(5000);
   const defaultStacksPeerAddr = getDefaultStacksNodePeerAddress();
   const stacksPeer = await StacksPeer.connectOutbound(defaultStacksPeerAddr);
 }

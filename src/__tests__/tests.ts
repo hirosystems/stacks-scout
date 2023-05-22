@@ -1,9 +1,9 @@
-import { PeerAddress } from '../peer-handler';
+import { PeerEndpoint } from '../peer-handler';
 import { timeout } from '../util';
 
 it('socket address', () => {
-  const addr1 = new PeerAddress('1.2.3.4', 1234);
-  const addr2 = new PeerAddress('1.2.3.4', 1234);
+  const addr1 = new PeerEndpoint('1.2.3.4', 1234);
+  const addr2 = new PeerEndpoint('1.2.3.4', 1234);
   expect(addr1).toBe(addr2);
 });
 
