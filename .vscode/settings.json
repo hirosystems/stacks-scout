@@ -1,0 +1,6 @@
+{
+  "search.exclude": {
+      "/build": true,
+      "**/node_modules": true,
+  }
+}
