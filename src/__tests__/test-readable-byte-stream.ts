@@ -86,4 +86,22 @@ describe('ResizableByteStream', () => {
     bytes.seek(0);
     expect(bytes.readUint64()).toBe(INT.MAX_U64);
   });
+
+  it('write-read bytes as hex string', () => {
+    const hexStr = '010203040506';
+    const bytes = new ResizableByteStream(0);
+    bytes.writeBytesFromHexString(hexStr);
+    expect(bytes.position).toBe(hexStr.length / 2);
+    bytes.seek(0);
+    expect(bytes.readBytesAsHexString(hexStr.length / 2)).toBe(hexStr);
+  });
+
+  it('write-read bytes as ascii string', () => {
+    const asciiStr = 'hello world';
+    const bytes = new ResizableByteStream(0);
+    bytes.writeBytesFromAsciiString(asciiStr);
+    expect(bytes.position).toBe(asciiStr.length);
+    bytes.seek(0);
+    expect(bytes.readBytesAsAsciiString(asciiStr.length)).toBe(asciiStr);
+  });
 });

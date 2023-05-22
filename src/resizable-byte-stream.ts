@@ -24,18 +24,6 @@ export class ResizableByteStream {
     this.dataView = new DataView(this.arrayBuffer);
   }
 
-  private grow() {
-    const nextSize = Math.min(
-      this.maxSize,
-      Math.max(this.arrayBuffer.byteLength * 2, 8)
-    );
-    if (nextSize > this.maxSize) {
-      throw new Error('ResizableByteStream already at maximum size');
-    }
-    // @ts-expect-error - resize is not in the types yet
-    this.arrayBuffer.resize(nextSize);
-  }
-
   private growToFit(byteSize: number) {
     // Check if buffer is already able to fit the bytes
     if (this.cursor + byteSize <= this.arrayBuffer.byteLength) {
@@ -47,7 +35,15 @@ export class ResizableByteStream {
       throw new Error('ResizableByteStream exceeded maximum size');
     }
 
-    this.grow();
+    const nextSize = Math.min(
+      this.maxSize,
+      Math.max(this.arrayBuffer.byteLength * 2, this.cursor + byteSize)
+    );
+    if (nextSize > this.maxSize) {
+      throw new Error('ResizableByteStream already at maximum size');
+    }
+    // @ts-expect-error - resize is not in the types yet
+    this.arrayBuffer.resize(nextSize);
   }
 
   get position() {
@@ -113,6 +109,14 @@ export class ResizableByteStream {
     this.cursor += buff.byteLength;
   }
 
+  writeBytesFromHexString(hex: string) {
+    this.writeBytes(Buffer.from(hex, 'hex'));
+  }
+
+  writeBytesFromAsciiString(str: string) {
+    this.writeBytes(Buffer.from(str, 'ascii'));
+  }
+
   readUint8() {
     const value = this.dataView.getUint8(this.cursor);
     this.cursor += INT_SIZE.I8;
@@ -165,6 +169,24 @@ export class ResizableByteStream {
     const value = new Uint8Array(this.arrayBuffer, this.cursor, length);
     this.cursor += length;
     return value;
+  }
+
+  readBytesAsHexString(length: number): string {
+    const value = this.readBytes(length);
+    return Buffer.from(
+      value.buffer,
+      value.byteOffset,
+      value.byteLength
+    ).toString('hex');
+  }
+
+  readBytesAsAsciiString(length: number): string {
+    const value = this.readBytes(length);
+    return Buffer.from(
+      value.buffer,
+      value.byteOffset,
+      value.byteLength
+    ).toString('ascii');
   }
 
   // Return a Nodejs Buffer without any copies

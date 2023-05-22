@@ -84,14 +84,14 @@ enum StacksMessageType {
 }
 */
 
-export interface MessageEncodeable {
+interface Encodeable {
   /** Encode object _into_ the given target byte stream */
   encode(target: ResizableByteStream): void;
 }
 
-export interface MessageDecodeable {
+interface Decodeable<T> {
   /** Decode object _from_ the given source byte stream */
-  new (source: ResizableByteStream): this;
+  new (source: ResizableByteStream): T;
 }
 
 /**
@@ -108,6 +108,16 @@ export const enum StacksMessageScalar {
 /** Byte buffers of fixed length. Byte buffers have known length and are transmitted as-is. */
 export interface StacksMessageByteBuffer {
   readonly messageByteLength: number;
+}
+
+/**
+ * Vectors are encoded as length-prefixed arrays. The first 4 bytes of a vector are a scalar that encodes the vector's length.
+ * Vectors are recursively defined in terms of other scalars, byte buffers, vectors, and typed containers.
+ */
+export interface StacksMessageVector<
+  T extends StacksMessageType = StacksMessageType
+> {
+  readonly items: T[];
 }
 
 /** Encoded as 1-byte */
@@ -141,26 +151,66 @@ export const enum StacksMessageContainerTypeID {
  * and type containers. Unlike a vector, there is no length field for a typed container -- the parser will begin
  * consuming the container's items immediately following the 1-byte type identifier.
  */
-export interface StacksMessageTypedContainer {
-  readonly containerType: StacksMessageContainerTypeID;
+export abstract class StacksMessageTypedContainer implements Encodeable {
+  abstract encode(target: ResizableByteStream): void;
+  abstract readonly containerType: StacksMessageContainerTypeID;
+  static decode(source: ResizableByteStream): StacksMessageTypedContainer {
+    const typeID: StacksMessageContainerTypeID = source.readUint8();
+    switch (typeID) {
+      case StacksMessageContainerTypeID.Handshake:
+        return HandshakeData.decode(source);
+      case StacksMessageContainerTypeID.HandshakeAccept:
+        return HandshakeAccept.decode(source);
+      case StacksMessageContainerTypeID.HandshakeReject:
+        return HandshakeReject.decode(source);
+      default:
+        throw new Error(`Unknown container type ID: ${typeID}`);
+    }
+  }
 }
 
 export type StacksMessageType =
   | StacksMessageScalar
   | StacksMessageByteBuffer
+  | StacksMessageVector
   | StacksMessageTypedContainer;
 
 /**
  * This is called just "StacksMessage" in the SIP, using "envelope" for disambiguation.
  * All Stacks messages are represented as:
  */
-export interface StacksMessageEnvelope {
+export class StacksMessageEnvelope implements Encodeable {
+  /** A fixed-length preamble which describes some metadata about the peer's view of the network. */
   readonly preamble: Preamble;
-  readonly relayers: RelayData[];
-  readonly payload: StacksMessageType;
+  /** A variable-length but bound-sized relayers vector which describes the order of peers that relayed a message. */
+  readonly relayers: RelayDataVec;
+  /** A variable-length payload, which encodes a specific peer message as a typed container. */
+  readonly payload: StacksMessageTypedContainer;
+
+  constructor(
+    preamble: Preamble,
+    relayers: RelayDataVec,
+    payload: StacksMessageTypedContainer
+  ) {
+    this.preamble = preamble;
+    this.relayers = relayers;
+    this.payload = payload;
+  }
+  static decode(source: ResizableByteStream): StacksMessageEnvelope {
+    return new StacksMessageEnvelope(
+      Preamble.decode(source),
+      RelayDataVec.decode(source),
+      StacksMessageTypedContainer.decode(source)
+    );
+  }
+  encode(target: ResizableByteStream): void {
+    this.preamble.encode(target);
+    this.relayers.encode(target);
+    this.payload.encode(target);
+  }
 }
 
-export interface Preamble {
+export class Preamble implements Encodeable {
   /**
    * (u32)
    * A 4-byte scalar to encode the semantic version of this software.
@@ -219,12 +269,72 @@ export interface Preamble {
    * (u32) This is the length of the message payload.
    */
   readonly payload_len: number;
+
+  constructor(
+    peer_version: number,
+    network_id: number,
+    seq: number,
+    burn_block_height: bigint,
+    burn_header_hash: BurnchainHeaderHash,
+    stable_burn_block_height: bigint,
+    stable_burn_header_hash: BurnchainHeaderHash,
+    additional_data: number,
+    signature: MessageSignature,
+    payload_len: number
+  ) {
+    this.peer_version = peer_version;
+    this.network_id = network_id;
+    this.seq = seq;
+    this.burn_block_height = burn_block_height;
+    this.burn_header_hash = burn_header_hash;
+    this.stable_burn_block_height = stable_burn_block_height;
+    this.stable_burn_header_hash = stable_burn_header_hash;
+    this.additional_data = additional_data;
+    this.signature = signature;
+    this.payload_len = payload_len;
+  }
+  static decode(source: ResizableByteStream): Preamble {
+    return new Preamble(
+      source.readUint32(),
+      source.readUint32(),
+      source.readUint32(),
+      source.readUint64(),
+      BurnchainHeaderHash.decode(source),
+      source.readUint64(),
+      BurnchainHeaderHash.decode(source),
+      source.readUint32(),
+      MessageSignature.decode(source),
+      source.readUint32()
+    );
+  }
+  encode(target: ResizableByteStream): void {
+    target.writeUint32(this.peer_version);
+    target.writeUint32(this.network_id);
+    target.writeUint32(this.seq);
+    target.writeUint64(this.burn_block_height);
+    this.burn_header_hash.encode(target);
+    target.writeUint64(this.stable_burn_block_height);
+    this.stable_burn_header_hash.encode(target);
+    target.writeUint32(this.additional_data);
+    this.signature.encode(target);
+    target.writeUint32(this.payload_len);
+  }
 }
 
 /** This is a container for the hash of a burn chain block header, encoded as a 32-byte cryptographic hash. */
-export interface BurnchainHeaderHash {
+export class BurnchainHeaderHash implements Encodeable {
   /** (32 bytes, hex encoded) */
   readonly hash: string;
+
+  constructor(hash: string) {
+    this.hash = hash;
+  }
+  static decode(source: ResizableByteStream): BurnchainHeaderHash {
+    return new BurnchainHeaderHash(source.readBytesAsHexString(32));
+  }
+  encode(target: ResizableByteStream): void {
+    target.writeBytesFromHexString(this.hash);
+  }
 }
 
 /**
@@ -232,19 +342,62 @@ export interface BurnchainHeaderHash {
  * code; the next 32 bytes are the r parameter, and the last 32 bytes are the s parameter. Because there are up to
  * two valid signature values for a secp256k1 curve, only the signature with the lower value for s will be accepted.
  */
-export interface MessageSignature {
+export class MessageSignature implements Encodeable {
   /** (65-bytes, hex encoded) */
   readonly signature: string;
+
+  constructor(signature: string) {
+    this.signature = signature;
+  }
+  static decode(source: ResizableByteStream): MessageSignature {
+    return new MessageSignature(source.readBytesAsHexString(65));
+  }
+  encode(target: ResizableByteStream): void {
+    target.writeBytesFromHexString(this.signature);
+  }
 }
 
-export interface RelayData {
+export class RelayData implements Encodeable {
   /** The peer that relayed a message */
   readonly peer: NeighborAddress;
   /** (u32) The sequence number of that message */
   readonly seq: number;
+
+  constructor(peer: NeighborAddress, seq: number) {
+    this.peer = peer;
+    this.seq = seq;
+  }
+  static decode(source: ResizableByteStream): RelayData {
+    throw new Error('Method not implemented.');
+  }
+  encode(target: ResizableByteStream): void {
+    throw new Error('Method not implemented.');
+  }
 }
 
-export interface NeighborAddress {
+export class RelayDataVec extends Array<RelayData> implements Encodeable {
+  constructor(items: RelayData[]) {
+    super(items.length);
+    for (let i = 0; i < items.length; i++) {
+      this[i] = items[i];
+    }
+  }
+  static decode(source: ResizableByteStream): RelayDataVec {
+    const length = source.readUint32();
+    const items: RelayData[] = new Array(length);
+    for (let i = 0; i < length; i++) {
+      items[i] = RelayData.decode(source);
+    }
+    return new RelayDataVec(items);
+  }
+  encode(target: ResizableByteStream): void {
+    target.writeUint32(this.length);
+    for (let i = 0; i < this.length; i++) {
+      this[i].encode(target);
+    }
+  }
+}
+export class NeighborAddress implements Encodeable {
   /** The IPv4 or IPv6 address of this peer */
   readonly addrbytes: PeerAddress;
   /** (u16) The port this peer listens on */
@@ -257,16 +410,48 @@ export interface NeighborAddress {
    * public key to expect when it establishes a connection.
    */
   readonly public_key_hash: string;
+
+  constructor(addrbytes: PeerAddress, port: number, public_key_hash: string) {
+    this.addrbytes = addrbytes;
+    this.port = port;
+    this.public_key_hash = public_key_hash;
+  }
+  static decode(source: ResizableByteStream): NeighborAddress {
+    return new NeighborAddress(
+      PeerAddress.decode(source),
+      source.readUint16(),
+      source.readBytesAsHexString(20)
+    );
+  }
+  encode(target: ResizableByteStream): void {
+    this.addrbytes.encode(target);
+    target.writeUint16(this.port);
+    target.writeBytesFromHexString(this.public_key_hash);
+  }
 }
 
 /** This is a fixed-length container for an IPv4 or an IPv6 address. */
-export interface PeerAddress {
+export class PeerAddress implements Encodeable {
+  // TODO: this is a hex encoded string but should be human-readable IP address string
   /** (16-byted) fixed-length container for an IPv4 or an IPv6 address. */
   readonly ip_address: string;
+
+  constructor(ip_address: string) {
+    if (ip_address.length !== 32) {
+      throw new Error('ip_address must be a 32 character hex string for now');
+    }
+    this.ip_address = ip_address;
+  }
+  static decode(source: ResizableByteStream): PeerAddress {
+    return new PeerAddress(source.readBytesAsHexString(16));
+  }
+  encode(target: ResizableByteStream): void {
+    target.writeBytesFromHexString(this.ip_address);
+  }
 }
 
-export interface HandshakeData extends StacksMessageTypedContainer {
-  readonly containerType: StacksMessageContainerTypeID.Handshake;
+export class HandshakeData implements StacksMessageTypedContainer, Encodeable {
+  readonly containerType = StacksMessageContainerTypeID.Handshake;
 
   /** Address of the peer sending the handshake */
   readonly addrbytes: PeerAddress;
@@ -289,10 +474,51 @@ export interface HandshakeData extends StacksMessageTypedContainer {
    * HTTP(S) URL to where this peer's block data can be fetched
    */
   readonly data_url: string;
+
+  constructor(
+    addrbytes: PeerAddress,
+    port: number,
+    services: number,
+    node_public_key: string,
+    expire_block_height: bigint,
+    data_url: string
+  ) {
+    if (node_public_key.length !== 66) {
+      throw new Error('node_public_key must be a 66 character hex string');
+    }
+    this.addrbytes = addrbytes;
+    this.port = port;
+    this.services = services;
+    this.node_public_key = node_public_key;
+    this.expire_block_height = expire_block_height;
+    this.data_url = data_url;
+  }
+  static decode(source: ResizableByteStream): HandshakeData {
+    return new HandshakeData(
+      PeerAddress.decode(source),
+      source.readUint16(),
+      source.readUint16(),
+      source.readBytesAsHexString(33),
+      source.readUint64(),
+      source.readBytesAsAsciiString(source.readUint8())
+    );
+  }
+  encode(target: ResizableByteStream): void {
+    target.writeUint8(this.containerType);
+    this.addrbytes.encode(target);
+    target.writeUint16(this.port);
+    target.writeUint16(this.services);
+    target.writeBytesFromHexString(this.node_public_key);
+    target.writeUint64(this.expire_block_height);
+    target.writeUint8(this.data_url.length);
+    target.writeBytesFromAsciiString(this.data_url);
+  }
 }
 
-export interface HandshakeAccept extends StacksMessageTypedContainer {
-  readonly containerType: StacksMessageContainerTypeID.HandshakeAccept;
+export class HandshakeAccept
+  implements StacksMessageTypedContainer, Encodeable
+{
+  readonly containerType = StacksMessageContainerTypeID.HandshakeAccept;
 
   /** The remote peer's handshake data */
   readonly handshake: HandshakeData;
@@ -301,8 +527,33 @@ export interface HandshakeAccept extends StacksMessageTypedContainer {
    * to wait between sending messages before the recipient will declare this peer as dead.
    */
   readonly heartbeat_interval: number;
+
+  constructor(handshake: HandshakeData, heartbeat_interval: number) {
+    this.handshake = handshake;
+    this.heartbeat_interval = heartbeat_interval;
+  }
+  static decode(source: ResizableByteStream): HandshakeAccept {
+    return new HandshakeAccept(
+      HandshakeData.decode(source),
+      source.readUint32()
+    );
+  }
+  encode(target: ResizableByteStream): void {
+    target.writeUint8(this.containerType);
+    this.handshake.encode(target);
+    target.writeUint32(this.heartbeat_interval);
+  }
 }
 
-export interface HandshakeReject extends StacksMessageTypedContainer {
-  readonly containerType: StacksMessageContainerTypeID.HandshakeReject;
+export class HandshakeReject
+  implements StacksMessageTypedContainer, Encodeable
+{
+  readonly containerType = StacksMessageContainerTypeID.HandshakeReject;
+
+  static decode(source: ResizableByteStream): HandshakeReject {
+    return new HandshakeReject();
+  }
+  encode(target: ResizableByteStream): void {
+    target.writeUint8(this.containerType);
+  }
 }
