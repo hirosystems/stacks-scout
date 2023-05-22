@@ -1,4 +1,9 @@
-import { getBitcoinChainInfo, waitForBtcRestResponsive } from './bitcoin-net';
+import {
+  getBtcBlockByHeight,
+  getBtcBlockHashByHeight,
+  getBtcChainInfo,
+  waitForBtcRestResponsive,
+} from './bitcoin-net';
 import { startControlPlanServer } from './p2p-control-plane-server';
 import { startDataPlanServer } from './p2p-data-plane-server';
 import { PeerAddress, StacksPeer } from './peer-handler';
@@ -17,7 +22,14 @@ async function init() {
   await startControlPlanServer();
 
   /*
-  getBitcoinChainInfo()
+  getBtcChainInfo()
+    .then((info) => {
+      logger.info(info);
+    })
+    .catch((err) => {
+      logger.error(err);
+    });
+  getBtcBlockByHeight(7)
     .then((info) => {
       logger.info(info);
     })

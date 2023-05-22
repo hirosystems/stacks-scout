@@ -1,5 +1,5 @@
 import fastify from 'fastify';
-import { getBitcoinChainInfo } from './bitcoin-net';
+import { getBtcChainInfo } from './bitcoin-net';
 import { getStacksNodeInfo } from './stacks-rpc';
 import { ENV, logger } from './util';
 
@@ -23,7 +23,7 @@ export async function startControlPlanServer() {
     url: '*',
     method: ['GET', 'POST', 'HEAD', 'PUT'],
     handler: async (request, reply) => {
-      const btcInfo = await getBitcoinChainInfo();
+      const btcInfo = await getBtcChainInfo();
       const stxInfo = await getStacksNodeInfo();
       return {
         btcInfo,

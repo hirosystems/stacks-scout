@@ -1,3 +1,4 @@
+import { request } from 'undici';
 import { ENV, logger, timeout } from './util';
 
 function getDefaultStacksNodeRpcEndpoint(): string {
@@ -15,8 +16,8 @@ export async function getStacksNodeInfo(
   hostname = getDefaultStacksNodeRpcEndpoint()
 ): Promise<any> {
   const url = getStacksNodeRpcUrl('/v2/info', hostname);
-  const res = await fetch(url);
-  return await res.json();
+  const res = await request(url, { throwOnError: true });
+  return await res.body.json();
 }
 
 export async function waitForRpcResponsive(
