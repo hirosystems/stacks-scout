@@ -14,12 +14,18 @@ export class StacksPeer {
     );
     this.socket = socket;
     this.listen();
+    this.initHandshake();
   }
 
   private listen() {
     this.socket.on('data', (data) => {
       console.log('got data', data);
     });
+  }
+
+  private initHandshake() {
+    // TODO
+    throw new Error('not implemented');
   }
 
   async close() {
