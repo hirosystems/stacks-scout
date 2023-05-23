@@ -1,3 +1,10 @@
+import { BlocksInv } from './message/blocks-inv';
+import { GetBlocksInv } from './message/get-blocks-inv';
+import { GetNeighbors } from './message/get-neighbors';
+import { Handshake } from './message/handshake';
+import { HandshakeAccept } from './message/handshake-accept';
+import { HandshakeReject } from './message/handshake-reject';
+import { Neighbors } from './message/neighbors';
 import { ResizableByteStream } from './resizable-byte-stream';
 
 /*
@@ -84,12 +91,12 @@ enum StacksMessageType {
 }
 */
 
-interface Encodeable {
+export interface Encodeable {
   /** Encode object _into_ the given target byte stream */
   encode(target: ResizableByteStream): void;
 }
 
-interface Decodeable<T> {
+export interface Decodeable<T> {
   /** Decode object _from_ the given source byte stream */
   new (source: ResizableByteStream): T;
 }
@@ -158,11 +165,19 @@ export abstract class StacksMessageTypedContainer implements Encodeable {
     const typeID: StacksMessageContainerTypeID = source.peekUint8();
     switch (typeID) {
       case StacksMessageContainerTypeID.Handshake:
-        return HandshakeData.decode(source);
+        return Handshake.decode(source);
       case StacksMessageContainerTypeID.HandshakeAccept:
         return HandshakeAccept.decode(source);
       case StacksMessageContainerTypeID.HandshakeReject:
         return HandshakeReject.decode(source);
+      case StacksMessageContainerTypeID.GetNeighbors:
+        return GetNeighbors.decode(source);
+      case StacksMessageContainerTypeID.Neighbors:
+        return Neighbors.decode(source);
+      case StacksMessageContainerTypeID.GetBlocksInv:
+        return GetBlocksInv.decode(source);
+      case StacksMessageContainerTypeID.BlocksInv:
+        return BlocksInv.decode(source);
       default:
         throw new Error(`Unknown container type ID: ${typeID}`);
     }
@@ -457,125 +472,5 @@ export class PeerAddress implements Encodeable {
   }
   encode(target: ResizableByteStream): void {
     target.writeBytesFromHexString(this.ip_address);
-  }
-}
-
-export class HandshakeData implements StacksMessageTypedContainer, Encodeable {
-  static readonly containerType = StacksMessageContainerTypeID.Handshake;
-  readonly containerType = HandshakeData.containerType;
-
-  /** Address of the peer sending the handshake */
-  readonly addrbytes: PeerAddress;
-  /** (u16) */
-  readonly port: number;
-  /**
-   * (u16) Bit field of services this peer offers.
-   * Supported bits:
-   * -- SERVICE_RELAY = 0x0001 -- must be set if the node relays messages for other nodes.
-   */
-  readonly services: number;
-  /**
-   * (33-bytes, hex encoded) This peer's public key
-   */
-  readonly node_public_key: string;
-  /** (u64) Burn chain block height at which this key will expire */
-  readonly expire_block_height: bigint;
-  /**
-   * (ASCII string that encodes a URL, 1-byte length prefix, string's bytes as-is)
-   * HTTP(S) URL to where this peer's block data can be fetched
-   */
-  readonly data_url: string;
-
-  constructor(
-    addrbytes: PeerAddress,
-    port: number,
-    services: number,
-    node_public_key: string,
-    expire_block_height: bigint,
-    data_url: string
-  ) {
-    if (node_public_key.length !== 66) {
-      throw new Error('node_public_key must be a 33 byte hex string');
-    }
-    this.addrbytes = addrbytes;
-    this.port = port;
-    this.services = services;
-    this.node_public_key = node_public_key;
-    this.expire_block_height = expire_block_height;
-    this.data_url = data_url;
-  }
-  static decode(source: ResizableByteStream): HandshakeData {
-    if (source.readUint8() !== this.containerType) {
-      throw new Error('Invalid container type');
-    }
-    return new HandshakeData(
-      PeerAddress.decode(source),
-      source.readUint16(),
-      source.readUint16(),
-      source.readBytesAsHexString(33),
-      source.readUint64(),
-      source.readBytesAsAsciiString(source.readUint8())
-    );
-  }
-  encode(target: ResizableByteStream): void {
-    target.writeUint8(this.containerType);
-    this.addrbytes.encode(target);
-    target.writeUint16(this.port);
-    target.writeUint16(this.services);
-    target.writeBytesFromHexString(this.node_public_key);
-    target.writeUint64(this.expire_block_height);
-    target.writeUint8(this.data_url.length);
-    target.writeBytesFromAsciiString(this.data_url);
-  }
-}
-
-export class HandshakeAccept
-  implements StacksMessageTypedContainer, Encodeable
-{
-  static readonly containerType = StacksMessageContainerTypeID.HandshakeAccept;
-  readonly containerType = HandshakeAccept.containerType;
-
-  /** The remote peer's handshake data */
-  readonly handshake: HandshakeData;
-  /**
-   * (u32) Maximum number of seconds the recipient peer expects this peer
-   * to wait between sending messages before the recipient will declare this peer as dead.
-   */
-  readonly heartbeat_interval: number;
-
-  constructor(handshake: HandshakeData, heartbeat_interval: number) {
-    this.handshake = handshake;
-    this.heartbeat_interval = heartbeat_interval;
-  }
-  static decode(source: ResizableByteStream): HandshakeAccept {
-    if (source.readUint8() !== this.containerType) {
-      throw new Error('Invalid container type');
-    }
-    return new HandshakeAccept(
-      HandshakeData.decode(source),
-      source.readUint32()
-    );
-  }
-  encode(target: ResizableByteStream): void {
-    target.writeUint8(this.containerType);
-    this.handshake.encode(target);
-    target.writeUint32(this.heartbeat_interval);
-  }
-}
-
-export class HandshakeReject
-  implements StacksMessageTypedContainer, Encodeable
-{
-  static readonly containerType = StacksMessageContainerTypeID.HandshakeReject;
-  readonly containerType = HandshakeReject.containerType;
-
-  static decode(source: ResizableByteStream): HandshakeReject {
-    if (source.readUint8() !== this.containerType) {
-      throw new Error('Invalid container type');
-    }
-    return new HandshakeReject();
-  }
-  encode(target: ResizableByteStream): void {
-    target.writeUint8(this.containerType);
   }
 }

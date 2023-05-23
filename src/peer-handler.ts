@@ -2,7 +2,6 @@ import * as net from 'node:net';
 import { WeakDictionary, logger } from './util';
 import {
   BurnchainHeaderHash,
-  HandshakeData,
   MessageSignature,
   NeighborAddress,
   PeerAddress,
@@ -12,6 +11,7 @@ import {
   StacksMessageEnvelope,
 } from './stacks-p2p-deser';
 import { ResizableByteStream } from './resizable-byte-stream';
+import { Handshake } from './message/handshake';
 
 export class StacksPeer {
   readonly socket: net.Socket;
@@ -48,7 +48,7 @@ export class StacksPeer {
     );
     const relayData = new RelayData(neighborAddress, 455);
     const relayVec = new RelayDataVec([relayData]);
-    const handshake = new HandshakeData(
+    const handshake = new Handshake(
       new PeerAddress('0d'.repeat(16)),
       5000,
       0,
