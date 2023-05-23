@@ -10,7 +10,8 @@ export class PoxInv implements StacksMessageTypedContainer, Encodeable {
   readonly containerType = PoxInv.containerType;
 
   /**
-   * (u16) Number of reward cycles encoded
+   * (u16) Number of reward cycles encoded.
+   * Should be at most num_cycles from the corresponding GetPoxInv
    */
   readonly bitlen: number;
 
@@ -19,10 +20,12 @@ export class PoxInv implements StacksMessageTypedContainer, Encodeable {
    * about the status of the reward cycle's PoX anchor block (it either cannot exist, or the node
    * has a copy), or `0` if the node is uncertain (i.e. it may exist but the node does not have a
    * copy if it does).
+   *
+   * Will have length `ceil(PoxInv.bitlen / 8)` bytes.
    */
-  readonly pox_bitvec: string;
+  readonly pox_bitvec: Uint8Array;
 
-  constructor(bitlen: number, pox_bitvec: string) {
+  constructor(bitlen: number, pox_bitvec: Uint8Array) {
     this.bitlen = bitlen;
     this.pox_bitvec = pox_bitvec;
   }
@@ -32,15 +35,18 @@ export class PoxInv implements StacksMessageTypedContainer, Encodeable {
       throw new Error('Invalid container type');
     }
     const bitlen = source.readUint16();
-    return new PoxInv(
-      bitlen,
-      source.readBytesAsHexString(Math.ceil(bitlen / 8))
-    );
+    return new PoxInv(bitlen, source.readBytesCopied(Math.ceil(bitlen / 8)));
   }
 
   encode(target: ResizableByteStream): void {
+    const bitvecLen = Math.ceil(this.bitlen / 8);
+    if (this.pox_bitvec.length !== bitvecLen) {
+      throw new Error(
+        `Expected bitvec length to be ${bitvecLen}, but was ${this.pox_bitvec.length}`
+      );
+    }
     target.writeUint8(this.containerType);
     target.writeUint16(this.bitlen);
-    target.writeBytesFromHexString(this.pox_bitvec);
+    target.writeBytes(this.pox_bitvec);
   }
 }

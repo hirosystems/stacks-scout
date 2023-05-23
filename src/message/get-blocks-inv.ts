@@ -4,7 +4,7 @@ import {
   Encodeable,
   StacksMessageContainerTypeID,
 } from '../stacks-p2p-deser';
-import { BurnchainHeaderHash } from './burnchain-header-hash';
+import { ConsensusHash } from './consensus-hash';
 
 export class GetBlocksInv implements StacksMessageTypedContainer, Encodeable {
   static readonly containerType = StacksMessageContainerTypeID.GetBlocksInv;
@@ -13,7 +13,7 @@ export class GetBlocksInv implements StacksMessageTypedContainer, Encodeable {
   /**
    * The consensus hash at the start of the requested reward cycle block range
    */
-  readonly consensus_hash: BurnchainHeaderHash;
+  readonly consensus_hash: ConsensusHash;
 
   /**
    * (u16) The number of blocks after to this consensus hash, including the block that corresponds
@@ -21,7 +21,7 @@ export class GetBlocksInv implements StacksMessageTypedContainer, Encodeable {
    */
   readonly num_blocks: number;
 
-  constructor(consensus_hash: BurnchainHeaderHash, num_blocks: number) {
+  constructor(consensus_hash: ConsensusHash, num_blocks: number) {
     this.consensus_hash = consensus_hash;
     this.num_blocks = num_blocks;
   }
@@ -30,10 +30,7 @@ export class GetBlocksInv implements StacksMessageTypedContainer, Encodeable {
     if (source.readUint8() !== this.containerType) {
       throw new Error('Invalid container type');
     }
-    return new GetBlocksInv(
-      BurnchainHeaderHash.decode(source),
-      source.readUint16()
-    );
+    return new GetBlocksInv(ConsensusHash.decode(source), source.readUint16());
   }
 
   encode(target: ResizableByteStream): void {

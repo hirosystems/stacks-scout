@@ -205,6 +205,12 @@ export class ResizableByteStream {
     return value;
   }
 
+  /** Same as `readBytes` but creates a copy in memory */
+  readBytesCopied(length: number): Uint8Array {
+    const value = this.readBytes(length);
+    return new Uint8Array(value);
+  }
+
   readBytesAsHexString(length: number): string {
     const value = this.readBytes(length);
     return Buffer.from(

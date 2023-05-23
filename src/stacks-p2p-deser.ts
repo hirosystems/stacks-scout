@@ -8,6 +8,9 @@ import { HandshakeReject } from './message/handshake-reject';
 import { MessageVectorArray } from './message/message-vector-array';
 import { Neighbors } from './message/neighbors';
 import { ResizableByteStream } from './resizable-byte-stream';
+import { GetPoxInv } from './message/get-pox-inv';
+import { PoxInv } from './message/pox-inv';
+import { BlocksAvailable } from './message/blocks-available';
 
 /*
 SIP-003:
@@ -149,6 +152,12 @@ export abstract class StacksMessageTypedContainer implements Encodeable {
         return GetBlocksInv.decode(source);
       case StacksMessageContainerTypeID.BlocksInv:
         return BlocksInv.decode(source);
+      case StacksMessageContainerTypeID.GetPoxInv:
+        return GetPoxInv.decode(source);
+      case StacksMessageContainerTypeID.PoxInv:
+        return PoxInv.decode(source);
+      case StacksMessageContainerTypeID.BlocksAvailable:
+        return BlocksAvailable.decode(source);
       default:
         throw new Error(`Unknown container type ID: ${typeID}`);
     }
