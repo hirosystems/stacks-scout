@@ -1,17 +1,14 @@
 import { Handshake } from '../message/handshake';
 import { HandshakeAccept } from '../message/handshake-accept';
 import { HandshakeReject } from '../message/handshake-reject';
+import { Preamble } from '../message/preamble';
 import { ResizableByteStream } from '../resizable-byte-stream';
-import {
-  BurnchainHeaderHash,
-  MessageSignature,
-  NeighborAddress,
-  PeerAddress,
-  Preamble,
-  RelayData,
-  RelayDataVec,
-  StacksMessageEnvelope,
-} from '../stacks-p2p-deser';
+import { PeerAddress } from '../message/peer-address';
+import { NeighborAddress } from '../message/neighbor-address';
+import { RelayData, RelayDataVec } from '../message/relay-data';
+import { MessageSignature } from '../message/message-signature';
+import { BurnchainHeaderHash } from '../message/burnchain-header-hash';
+import { StacksMessageEnvelope } from '../message/stacks-message-envelope';
 
 describe('p2p StacksMessage encoding', () => {
   it('should encode and decode a StacksMessageEnvelope', () => {

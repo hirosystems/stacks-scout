@@ -3,8 +3,8 @@ import {
   StacksMessageTypedContainer,
   StacksMessageContainerTypeID,
   Encodeable,
-  NeighborAddress,
 } from '../stacks-p2p-deser';
+import { NeighborAddress } from './neighbor-address';
 import { MessageVectorArray } from './message-vector-array';
 
 export class NeighborsVec extends MessageVectorArray<NeighborAddress> {

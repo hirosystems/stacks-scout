@@ -2,9 +2,9 @@ import { ResizableByteStream } from '../resizable-byte-stream';
 import {
   StacksMessageTypedContainer,
   StacksMessageContainerTypeID,
-  PeerAddress,
   Encodeable,
 } from '../stacks-p2p-deser';
+import { PeerAddress } from './peer-address';
 
 export class Handshake implements StacksMessageTypedContainer, Encodeable {
   static readonly containerType = StacksMessageContainerTypeID.Handshake;

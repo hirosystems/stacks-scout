@@ -1,17 +1,14 @@
 import * as net from 'node:net';
 import { WeakDictionary, logger } from './util';
-import {
-  BurnchainHeaderHash,
-  MessageSignature,
-  NeighborAddress,
-  PeerAddress,
-  Preamble,
-  RelayData,
-  RelayDataVec,
-  StacksMessageEnvelope,
-} from './stacks-p2p-deser';
+import { PeerAddress } from './message/peer-address';
+import { NeighborAddress } from './message/neighbor-address';
+import { RelayData, RelayDataVec } from './message/relay-data';
+import { MessageSignature } from './message/message-signature';
+import { BurnchainHeaderHash } from './message/burnchain-header-hash';
+import { StacksMessageEnvelope } from './message/stacks-message-envelope';
 import { ResizableByteStream } from './resizable-byte-stream';
 import { Handshake } from './message/handshake';
+import { Preamble } from './message/preamble';
 
 export class StacksPeer {
   readonly socket: net.Socket;

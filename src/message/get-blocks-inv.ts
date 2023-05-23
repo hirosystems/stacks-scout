@@ -3,8 +3,8 @@ import {
   StacksMessageTypedContainer,
   Encodeable,
   StacksMessageContainerTypeID,
-  BurnchainHeaderHash,
 } from '../stacks-p2p-deser';
+import { BurnchainHeaderHash } from './burnchain-header-hash';
 
 export class GetBlocksInv implements StacksMessageTypedContainer, Encodeable {
   static readonly containerType = StacksMessageContainerTypeID.GetBlocksInv;
