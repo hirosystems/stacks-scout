@@ -9,7 +9,7 @@ export class PeerAddress implements Encodeable {
   readonly ip_address: string;
 
   constructor(ip_address: string) {
-    if (ip_address.length !== 32) {
+    if (ip_address.length !== 16) {
       throw new Error('ip_address must be a 16 byte hex string for now');
     }
     this.ip_address = ip_address;

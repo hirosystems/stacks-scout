@@ -1,7 +1,9 @@
 import { ResizableByteStream } from '../resizable-byte-stream';
-import { Encodeable } from '../stacks-p2p-deser';
+import { Encodeable, Signable } from '../stacks-p2p-deser';
 import { MessageSignature } from './message-signature';
 import { BurnchainHeaderHash } from './burnchain-header-hash';
+import { createHash, randomBytes } from 'node:crypto';
+import * as secp256k1 from 'secp256k1';
 
 export class Preamble implements Encodeable {
   /**
@@ -57,11 +59,11 @@ export class Preamble implements Encodeable {
    * This is a signature over the entire message (preamble and payload).
    * When generating this value, the signature bytes below must all be 0's.
    */
-  readonly signature: MessageSignature;
+  signature: MessageSignature;
   /**
    * (u32) This is the length of the message payload.
    */
-  readonly payload_len: number;
+  payload_len: number;
 
   constructor(
     peer_version: number,
@@ -86,6 +88,7 @@ export class Preamble implements Encodeable {
     this.signature = signature;
     this.payload_len = payload_len;
   }
+
   static decode(source: ResizableByteStream): Preamble {
     return new Preamble(
       source.readUint32(),
@@ -100,6 +103,7 @@ export class Preamble implements Encodeable {
       source.readUint32()
     );
   }
+
   encode(target: ResizableByteStream): void {
     target.writeUint32(this.peer_version);
     target.writeUint32(this.network_id);
@@ -111,5 +115,34 @@ export class Preamble implements Encodeable {
     target.writeUint32(this.additional_data);
     this.signature.encode(target);
     target.writeUint32(this.payload_len);
+  }
+
+  // Based on https://github.com/stacks-network/stacks-blockchain/blob/master/src/net/codec.rs#L88
+  sign(envelopeStream: ResizableByteStream): void {
+    // const privKey = randomBytes(32);
+
+    // Zero-out the old signature so we can calculate a new one.
+    const preambleStream = new ResizableByteStream();
+    const oldSignature = this.signature;
+    this.signature = MessageSignature.empty();
+    this.signature.encode(preambleStream);
+    this.signature = oldSignature;
+
+    const sha256 = createHash('sha256')
+      .update(preambleStream.asBuffer())
+      .update(envelopeStream.asBuffer())
+      .digest();
+
+    let privKey;
+    do {
+      privKey = randomBytes(32);
+    } while (!secp256k1.privateKeyVerify(privKey));
+    const signature = secp256k1.ecdsaSign(sha256, privKey);
+
+    const buf1 = Buffer.alloc(1);
+    buf1.writeUint8(signature.recid);
+    this.signature = new MessageSignature(
+      Buffer.concat([buf1, signature.signature]).toString('hex')
+    );
   }
 }

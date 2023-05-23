@@ -1,5 +1,5 @@
 import * as net from 'node:net';
-import { WeakDictionary, logger } from './util';
+import { ENV, WeakDictionary, logger } from './util';
 import { PeerAddress } from './message/peer-address';
 import { NeighborAddress } from './message/neighbor-address';
 import { RelayData, RelayDataVec } from './message/relay-data';
@@ -38,40 +38,36 @@ export class StacksPeer {
     // INFO [1684796429.358630] [src/net/chat.rs:1920] [p2p-(0.0.0.0:20444,0.0.0.0:20443)] convo:id=4,outbound=false,peer=UNKNOWN+UNKNOWN://192.168.128.1:48928: failed to recv on P2P conversation: InvalidMessage
 
     // TODO: fill this with real/valid data
-    const neighborAddress = new NeighborAddress(
-      new PeerAddress('0f'.repeat(16)),
-      4000,
-      '0e'.repeat(20)
-    );
-    const relayData = new RelayData(neighborAddress, 455);
-    const relayVec = new RelayDataVec([relayData]);
     const handshake = new Handshake(
-      new PeerAddress('0d'.repeat(16)),
+      new PeerAddress('007f000000000001'), // 127.0.0.1
       5000,
       0,
       '0c'.repeat(33),
       50n,
       'http://test.local'
     );
-
-    // Encode the handshake to get the length
-    const handshakeByteStream = new ResizableByteStream();
-    handshake.encode(handshakeByteStream);
-    const handshakeLength = handshakeByteStream.position;
-
     const preamble = new Preamble(
-      123,
-      321,
-      4,
-      5n,
-      new BurnchainHeaderHash('ff'.repeat(32)),
-      6n,
-      new BurnchainHeaderHash('ee'.repeat(32)),
-      7,
-      new MessageSignature('dd'.repeat(65)),
-      handshakeLength
+      0x15000000,
+      0x15000001,
+      0,
+      10n,
+      new BurnchainHeaderHash(
+        '0000000000000000000435785429211dca22ed6e2444800c88ad042eb0cc0e94'
+      ),
+      3n,
+      new BurnchainHeaderHash(
+        '000000000000000000050bcb25b81adaa1f2138dfd58e05634544b2e77a3dcbb'
+      ),
+      0,
+      new MessageSignature('dd'.repeat(65)), // Will be calculated later
+      0 // Will be calculated later
     );
-    const envelope = new StacksMessageEnvelope(preamble, relayVec, handshake);
+    const envelope = new StacksMessageEnvelope(
+      preamble,
+      new RelayDataVec([]), // Empty, we're generating this message.
+      handshake
+    );
+    envelope.sign();
 
     const byteStream = new ResizableByteStream();
     envelope.encode(byteStream);
