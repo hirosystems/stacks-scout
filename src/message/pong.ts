@@ -9,7 +9,10 @@ export class Pong implements StacksMessageTypedContainer, Encodeable {
   static readonly containerType = StacksMessageContainerTypeID.Pong;
   readonly containerType = Pong.containerType;
 
-  /** (u32) Random number */
+  /**
+   * (u32) Random number.
+   * Should match the nonce field sent by the corresponding Ping.
+   */
   readonly nonce: number;
 
   constructor(nonce: number) {
