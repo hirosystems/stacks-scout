@@ -15,6 +15,9 @@ import {
 import { Transaction } from './message/transaction';
 import { Blocks } from './message/blocks';
 import { Microblocks } from './message/microblocks';
+import { Nack } from './message/nack';
+import { Ping } from './message/ping';
+import { Pong } from './message/pong';
 
 /*
 SIP-003:
@@ -171,11 +174,11 @@ export abstract class StacksMessageTypedContainer implements Encodeable {
       case StacksMessageContainerTypeID.Transaction:
         return Transaction.decode(source);
       case StacksMessageContainerTypeID.Nack:
-        throw new Error('Not implemented');
+        return Nack.decode(source);
       case StacksMessageContainerTypeID.Ping:
-        throw new Error('Not implemented');
+        return Ping.decode(source);
       case StacksMessageContainerTypeID.Pong:
-        throw new Error('Not implemented');
+        return Pong.decode(source);
       case StacksMessageContainerTypeID.NatPunchRequest:
         throw new Error('Not implemented');
       case StacksMessageContainerTypeID.NatPunchReply:
