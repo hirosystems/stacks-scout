@@ -4,6 +4,7 @@ import { GetNeighbors } from './message/get-neighbors';
 import { Handshake } from './message/handshake';
 import { HandshakeAccept } from './message/handshake-accept';
 import { HandshakeReject } from './message/handshake-reject';
+import { MessageVectorArray } from './message/message-vector-array';
 import { Neighbors } from './message/neighbors';
 import { ResizableByteStream } from './resizable-byte-stream';
 
@@ -94,11 +95,6 @@ enum StacksMessageType {
 export interface Encodeable {
   /** Encode object _into_ the given target byte stream */
   encode(target: ResizableByteStream): void;
-}
-
-export interface Decodeable<T> {
-  /** Decode object _from_ the given source byte stream */
-  new (source: ResizableByteStream): T;
 }
 
 /**
@@ -397,28 +393,15 @@ export class RelayData implements Encodeable {
   }
 }
 
-export class RelayDataVec extends Array<RelayData> implements Encodeable {
-  constructor(items: RelayData[]) {
-    super(items.length);
-    for (let i = 0; i < items.length; i++) {
-      this[i] = items[i];
-    }
+export class RelayDataVec extends MessageVectorArray<RelayData> {
+  constructor(items?: RelayData[]) {
+    super(items);
   }
   static decode(source: ResizableByteStream): RelayDataVec {
-    const length = source.readUint32();
-    const items: RelayData[] = new Array(length);
-    for (let i = 0; i < length; i++) {
-      items[i] = RelayData.decode(source);
-    }
-    return new RelayDataVec(items);
-  }
-  encode(target: ResizableByteStream): void {
-    target.writeUint32(this.length);
-    for (let i = 0; i < this.length; i++) {
-      this[i].encode(target);
-    }
+    return new this().decode(source, RelayData);
   }
 }
+
 export class NeighborAddress implements Encodeable {
   /** The IPv4 or IPv6 address of this peer */
   readonly addrbytes: PeerAddress;

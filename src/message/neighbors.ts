@@ -5,6 +5,16 @@ import {
   Encodeable,
   NeighborAddress,
 } from '../stacks-p2p-deser';
+import { MessageVectorArray } from './message-vector-array';
+
+export class NeighborsVec extends MessageVectorArray<NeighborAddress> {
+  constructor(items?: NeighborAddress[]) {
+    super(items);
+  }
+  static decode(source: ResizableByteStream): NeighborsVec {
+    return new this().decode(source, NeighborAddress);
+  }
+}
 
 export class Neighbors implements StacksMessageTypedContainer, Encodeable {
   static readonly containerType = StacksMessageContainerTypeID.Neighbors;
@@ -14,9 +24,9 @@ export class Neighbors implements StacksMessageTypedContainer, Encodeable {
    * List of neighbor addresses and public key hints. This vector will be at most 128 elements
    * long.
    */
-  readonly neighbors: NeighborAddress[];
+  readonly neighbors: NeighborsVec;
 
-  constructor(neighbors: NeighborAddress[]) {
+  constructor(neighbors: NeighborsVec) {
     this.neighbors = neighbors;
   }
 
@@ -24,20 +34,11 @@ export class Neighbors implements StacksMessageTypedContainer, Encodeable {
     if (source.readUint8() !== this.containerType) {
       throw new Error('Invalid container type');
     }
-    const neighbors: NeighborAddress[] = [];
-    try {
-      // TODO: Is this right? No neighbor count is given in the message.
-      neighbors.push(NeighborAddress.decode(source));
-    } catch (error) {
-      //
-    }
-    return new Neighbors(neighbors);
+    return new Neighbors(NeighborsVec.decode(source));
   }
 
   encode(target: ResizableByteStream): void {
     target.writeUint8(this.containerType);
-    for (const neighbor of this.neighbors) {
-      neighbor.encode(target);
-    }
+    this.neighbors.encode(target);
   }
 }
