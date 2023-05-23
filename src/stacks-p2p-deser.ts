@@ -110,10 +110,6 @@ export interface Encodeable {
   encode(target: ResizableByteStream): void;
 }
 
-export interface Signable {
-  sign(): void;
-}
-
 /** Encoded as 1-byte */
 export const enum StacksMessageContainerTypeID {
   Handshake = 0,

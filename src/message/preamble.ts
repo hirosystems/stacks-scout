@@ -1,5 +1,5 @@
 import { ResizableByteStream } from '../resizable-byte-stream';
-import { Encodeable, Signable } from '../stacks-p2p-deser';
+import { Encodeable } from '../stacks-p2p-deser';
 import { MessageSignature } from './message-signature';
 import { BurnchainHeaderHash } from './burnchain-header-hash';
 import { createHash, randomBytes } from 'node:crypto';
@@ -118,7 +118,7 @@ export class Preamble implements Encodeable {
   }
 
   // Based on https://github.com/stacks-network/stacks-blockchain/blob/master/src/net/codec.rs#L88
-  sign(envelopeStream: ResizableByteStream): void {
+  sign(privKey: Buffer, envelopeStream: ResizableByteStream): void {
     // const privKey = randomBytes(32);
 
     // Zero-out the old signature so we can calculate a new one.
@@ -133,12 +133,7 @@ export class Preamble implements Encodeable {
       .update(envelopeStream.asBuffer())
       .digest();
 
-    let privKey;
-    do {
-      privKey = randomBytes(32);
-    } while (!secp256k1.privateKeyVerify(privKey));
     const signature = secp256k1.ecdsaSign(sha256, privKey);
-
     const buf1 = Buffer.alloc(1);
     buf1.writeUint8(signature.recid);
     this.signature = new MessageSignature(

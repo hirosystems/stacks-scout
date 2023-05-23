@@ -9,10 +9,15 @@ import { StacksMessageEnvelope } from './message/stacks-message-envelope';
 import { ResizableByteStream } from './resizable-byte-stream';
 import { Handshake } from './message/handshake';
 import { Preamble } from './message/preamble';
+import { randomBytes } from 'node:crypto';
+import * as secp256k1 from 'secp256k1';
 
 export class StacksPeer {
   readonly socket: net.Socket;
   readonly address: PeerEndpoint;
+  /** This node's private key */
+  readonly privKey: Buffer;
+  readonly pubKey: Buffer;
   /** epoch in milliseconds, zero for never */
   lastSeen = 0;
 
@@ -21,6 +26,10 @@ export class StacksPeer {
       socket.remoteAddress as string,
       socket.remotePort as number
     );
+    do {
+      this.privKey = randomBytes(32);
+    } while (!secp256k1.privateKeyVerify(this.privKey));
+    this.pubKey = Buffer.from(secp256k1.publicKeyCreate(this.privKey));
     this.socket = socket;
     this.listen();
     this.initHandshake();
@@ -42,7 +51,7 @@ export class StacksPeer {
       new PeerAddress('007f000000000001'), // 127.0.0.1
       5000,
       0,
-      '0c'.repeat(33),
+      this.pubKey.toString('hex'),
       50n,
       'http://test.local'
     );
@@ -67,7 +76,7 @@ export class StacksPeer {
       new RelayDataVec([]), // Empty, we're generating this message.
       handshake
     );
-    envelope.sign();
+    envelope.sign(this.privKey);
 
     const byteStream = new ResizableByteStream();
     envelope.encode(byteStream);

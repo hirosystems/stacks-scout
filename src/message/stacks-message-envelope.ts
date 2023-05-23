@@ -1,17 +1,13 @@
 import { Preamble } from './preamble';
 import { ResizableByteStream } from '../resizable-byte-stream';
-import {
-  Encodeable,
-  Signable,
-  StacksMessageTypedContainer,
-} from '../stacks-p2p-deser';
+import { Encodeable, StacksMessageTypedContainer } from '../stacks-p2p-deser';
 import { RelayDataVec } from './relay-data';
 
 /**
  * This is called just "StacksMessage" in the SIP, using "envelope" for disambiguation.
  * All Stacks messages are represented as:
  */
-export class StacksMessageEnvelope implements Encodeable, Signable {
+export class StacksMessageEnvelope implements Encodeable {
   /** A fixed-length preamble which describes some metadata about the peer's view of the network. */
   readonly preamble: Preamble;
   /** A variable-length but bound-sized relayers vector which describes the order of peers that relayed a message. */
@@ -43,17 +39,17 @@ export class StacksMessageEnvelope implements Encodeable, Signable {
     this.payload.encode(target);
   }
 
-  sign(): void {
+  sign(privKey: Buffer): void {
     if (this.relayers.length > 0) {
       throw new Error('Can not sign a relayed message');
     }
-    // const privKey = secp.utils.randomPrivateKey();
 
-    // Determine length and sign Preamble
-    const stream = new ResizableByteStream();
-    this.relayers.encode(stream);
-    this.payload.encode(stream);
-    this.preamble.payload_len = stream.position;
-    this.preamble.sign(stream);
+    // Determine length
+    const contentStream = new ResizableByteStream();
+    this.relayers.encode(contentStream);
+    this.payload.encode(contentStream);
+    this.preamble.payload_len = contentStream.position;
+
+    this.preamble.sign(privKey, contentStream);
   }
 }
