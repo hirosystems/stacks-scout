@@ -119,8 +119,6 @@ export class Preamble implements Encodeable {
 
   // Based on https://github.com/stacks-network/stacks-blockchain/blob/master/src/net/codec.rs#L88
   sign(privKey: Buffer, envelopeStream: ResizableByteStream): void {
-    // const privKey = randomBytes(32);
-
     // Zero-out the old signature so we can calculate a new one.
     const preambleStream = new ResizableByteStream();
     const oldSignature = this.signature;

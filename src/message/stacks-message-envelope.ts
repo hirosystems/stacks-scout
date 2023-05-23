@@ -39,11 +39,11 @@ export class StacksMessageEnvelope implements Encodeable {
     this.payload.encode(target);
   }
 
+  // Based on https://github.com/stacks-network/stacks-blockchain/blob/master/src/net/codec.rs#L1120
   sign(privKey: Buffer): void {
     if (this.relayers.length > 0) {
       throw new Error('Can not sign a relayed message');
     }
-
     // Determine length
     const contentStream = new ResizableByteStream();
     this.relayers.encode(contentStream);
