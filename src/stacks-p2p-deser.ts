@@ -1,16 +1,20 @@
-import { RelayData } from './message/relay-data';
 import { BlocksInv } from './message/blocks-inv';
 import { GetBlocksInv } from './message/get-blocks-inv';
 import { GetNeighbors } from './message/get-neighbors';
 import { Handshake } from './message/handshake';
 import { HandshakeAccept } from './message/handshake-accept';
 import { HandshakeReject } from './message/handshake-reject';
-import { MessageVectorArray } from './message/message-vector-array';
 import { Neighbors } from './message/neighbors';
 import { ResizableByteStream } from './resizable-byte-stream';
 import { GetPoxInv } from './message/get-pox-inv';
 import { PoxInv } from './message/pox-inv';
-import { BlocksAvailable } from './message/blocks-available';
+import {
+  BlocksAvailable,
+  MicroblocksAvailable,
+} from './message/blocks-available';
+import { Transaction } from './message/transaction';
+import { Blocks } from './message/blocks';
+import { Microblocks } from './message/microblocks';
 
 /*
 SIP-003:
@@ -158,6 +162,24 @@ export abstract class StacksMessageTypedContainer implements Encodeable {
         return PoxInv.decode(source);
       case StacksMessageContainerTypeID.BlocksAvailable:
         return BlocksAvailable.decode(source);
+      case StacksMessageContainerTypeID.MicroblocksAvailable:
+        return MicroblocksAvailable.decode(source);
+      case StacksMessageContainerTypeID.Blocks:
+        return Blocks.decode(source);
+      case StacksMessageContainerTypeID.Microblocks:
+        return Microblocks.decode(source);
+      case StacksMessageContainerTypeID.Transaction:
+        return Transaction.decode(source);
+      case StacksMessageContainerTypeID.Nack:
+        throw new Error('Not implemented');
+      case StacksMessageContainerTypeID.Ping:
+        throw new Error('Not implemented');
+      case StacksMessageContainerTypeID.Pong:
+        throw new Error('Not implemented');
+      case StacksMessageContainerTypeID.NatPunchRequest:
+        throw new Error('Not implemented');
+      case StacksMessageContainerTypeID.NatPunchReply:
+        throw new Error('Not implemented');
       default:
         throw new Error(`Unknown container type ID: ${typeID}`);
     }
