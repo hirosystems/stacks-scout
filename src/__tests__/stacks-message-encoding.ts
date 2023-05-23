@@ -1,17 +1,14 @@
+import { Handshake } from '../message/handshake';
+import { HandshakeAccept } from '../message/handshake-accept';
+import { HandshakeReject } from '../message/handshake-reject';
+import { Preamble } from '../message/preamble';
 import { ResizableByteStream } from '../resizable-byte-stream';
-import {
-  BurnchainHeaderHash,
-  HandshakeAccept,
-  HandshakeData,
-  HandshakeReject,
-  MessageSignature,
-  NeighborAddress,
-  PeerAddress,
-  Preamble,
-  RelayData,
-  RelayDataVec,
-  StacksMessageEnvelope,
-} from '../stacks-p2p-deser';
+import { PeerAddress } from '../message/peer-address';
+import { NeighborAddress } from '../message/neighbor-address';
+import { RelayData, RelayDataVec } from '../message/relay-data';
+import { MessageSignature } from '../message/message-signature';
+import { BurnchainHeaderHash } from '../message/burnchain-header-hash';
+import { StacksMessageEnvelope } from '../message/stacks-message-envelope';
 
 describe('p2p StacksMessage encoding', () => {
   it('should encode and decode a StacksMessageEnvelope', () => {
@@ -34,7 +31,7 @@ describe('p2p StacksMessage encoding', () => {
     );
     const relayData = new RelayData(neighborAddress, 455);
     const relayVec = new RelayDataVec([relayData]);
-    const handshake = new HandshakeData(
+    const handshake = new Handshake(
       new PeerAddress('0d'.repeat(16)),
       5000,
       0,
@@ -53,7 +50,7 @@ describe('p2p StacksMessage encoding', () => {
   });
 
   it('should encode and decode handshake accept payload', () => {
-    const handshake = new HandshakeData(
+    const handshake = new Handshake(
       new PeerAddress('0d'.repeat(16)),
       5000,
       0,
