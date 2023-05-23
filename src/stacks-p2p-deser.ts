@@ -18,6 +18,8 @@ import { Microblocks } from './message/microblocks';
 import { Nack } from './message/nack';
 import { Ping } from './message/ping';
 import { Pong } from './message/pong';
+import { NatPunchRequest } from './message/nat-punch-request';
+import { NatPunchReply } from './message/nat-punch-reply';
 
 /*
 SIP-003:
@@ -180,9 +182,9 @@ export abstract class StacksMessageTypedContainer implements Encodeable {
       case StacksMessageContainerTypeID.Pong:
         return Pong.decode(source);
       case StacksMessageContainerTypeID.NatPunchRequest:
-        throw new Error('Not implemented');
+        return NatPunchRequest.decode(source);
       case StacksMessageContainerTypeID.NatPunchReply:
-        throw new Error('Not implemented');
+        return NatPunchReply.decode(source);
       default:
         throw new Error(`Unknown container type ID: ${typeID}`);
     }
