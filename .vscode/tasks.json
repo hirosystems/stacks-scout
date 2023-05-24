@@ -5,6 +5,8 @@
       "label": "docker-compose-up",
       "type": "shell",
       "command": "docker compose down -t 1 -v && docker compose up --force-recreate -V",
+      // This command is useful for filtering output to only show what you care about:
+      // "command": "docker compose down -t 1 -v && docker compose up --force-recreate -V -d && docker-compose logs -f -n 1 | grep -F \"Preamble invalid\"",
       "isBackground": true,
       "problemMatcher": {
         "pattern": {
