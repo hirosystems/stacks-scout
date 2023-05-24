@@ -14,6 +14,14 @@ import * as secp256k1 from 'secp256k1';
 import { getBtcBlockHashByHeight, getBtcChainInfo } from './bitcoin-net';
 import { StacksPeerMetrics } from './server/prometheus-server';
 import { HandshakeData } from './message/handshake-data';
+import { GetNeighbors } from './message/get-neighbors';
+import {
+  StacksMessageContainerTypeID,
+  StacksMessageTypedContainer,
+  StacksMessageContainerType,
+} from './stacks-p2p-deser';
+import { HandshakeAccept } from './message/handshake-accept';
+import { Neighbors } from './message/neighbors';
 
 // From src/core/mod.rs
 
@@ -109,6 +117,8 @@ export class StacksPeer extends EventEmitter {
     );
     this.metrics = metrics;
     do {
+      // TODO: use a persistent key for this (stacks-scout) peer rather than this per-peer key
+      // probably set via env var
       this.privKey = randomBytes(32);
     } while (!secp256k1.privateKeyVerify(this.privKey));
     this.pubKey = Buffer.from(secp256k1.publicKeyCreate(this.privKey));
@@ -194,7 +204,10 @@ export class StacksPeer extends EventEmitter {
         lastChunk = Buffer.alloc(0);
       }
 
-      logger.debug(receivedMsg, 'got peer message');
+      logger.debug(
+        receivedMsg,
+        `received ${receivedMsg.payload.constructor.name} message from ${this.address}`
+      );
       this.emit('messageReceived', receivedMsg);
 
       // EXAMPLE metric manipulation
@@ -211,7 +224,21 @@ export class StacksPeer extends EventEmitter {
     });
   }
 
-  async initHandshake() {
+  async waitForMessage(predicate: (msg: StacksMessageEnvelope) => boolean) {
+    return new Promise<StacksMessageEnvelope>((resolve) => {
+      const listener = (msg: StacksMessageEnvelope) => {
+        if (predicate(msg)) {
+          this.removeListener('messageReceived', listener);
+          resolve(msg);
+        }
+      };
+      this.on('messageReceived', listener);
+    });
+  }
+
+  async createAndSignEnvelope(
+    message: StacksMessageContainerType
+  ): Promise<StacksMessageEnvelope> {
     let peerVersion: number;
     let networkID: number;
     let stableConfirmations: number;
@@ -243,17 +270,6 @@ export class StacksPeer extends EventEmitter {
       btcStableBurnHeight
     );
 
-    const handshake = new Handshake(
-      new HandshakeData(
-        new PeerAddress('127.0.0.1'),
-        ENV.CONTROL_PLANE_PORT,
-        0x0001,
-        this.pubKey.toString('hex'),
-        100000n,
-        ENV.DATA_PLANE_PUBLIC_URL
-      )
-    );
-
     const preamble = new Preamble(
       /* peer_version */ peerVersion,
       /* network_id */ networkID,
@@ -269,11 +285,56 @@ export class StacksPeer extends EventEmitter {
     const envelope = new StacksMessageEnvelope(
       preamble,
       new RelayDataVec([]), // No relays, we're generating this message.
-      handshake
+      message
     );
     envelope.sign(this.privKey);
+    return envelope;
+  }
 
+  async performHandshake(): Promise<StacksMessageEnvelope<HandshakeAccept>> {
+    const handshake = new Handshake(
+      new HandshakeData(
+        new PeerAddress('127.0.0.1'),
+        ENV.CONTROL_PLANE_PORT,
+        0x0001,
+        this.pubKey.toString('hex'),
+        100000n,
+        ENV.DATA_PLANE_PUBLIC_URL
+      )
+    );
+    const envelope = await this.createAndSignEnvelope(handshake);
     this.send(envelope);
+    const handshakeReply = await this.waitForMessage(
+      (msg) =>
+        msg.payload.containerType ===
+          StacksMessageContainerTypeID.HandshakeAccept ||
+        msg.payload.containerType ===
+          StacksMessageContainerTypeID.HandshakeReject
+    );
+    if (
+      handshakeReply.payload.containerType ===
+      StacksMessageContainerTypeID.HandshakeReject
+    ) {
+      throw new Error('Handshake rejected');
+    } else if (
+      handshakeReply.payload.containerType ===
+      StacksMessageContainerTypeID.HandshakeAccept
+    ) {
+      return handshakeReply as StacksMessageEnvelope<HandshakeAccept>;
+    } else {
+      throw new Error('Invalid handshake reply');
+    }
+  }
+
+  async requestNeighbors(): Promise<StacksMessageEnvelope<Neighbors>> {
+    const getNeighbors = new GetNeighbors();
+    const envelope = await this.createAndSignEnvelope(getNeighbors);
+    this.send(envelope);
+    const neighbors = await this.waitForMessage(
+      (msg) =>
+        msg.payload.containerType === StacksMessageContainerTypeID.Neighbors
+    );
+    return neighbors as StacksMessageEnvelope<Neighbors>;
   }
 
   async send(envelope: StacksMessageEnvelope) {
@@ -313,10 +374,28 @@ export class StacksPeer extends EventEmitter {
       socket.once('connect', onConnect);
       socket.once('error', onError);
     });
+
     const peer = new this(socket, PeerDirection.Outbound, metrics);
     logger.info(`Connected to Stacks peer: ${peer.address}`);
-    peer.initHandshake().catch((error) => {
-      logger.error(error, 'Error initializing handshake');
+
+    const handshakeReply = await peer.performHandshake();
+    logger.info(`Handshake accepted by peer: ${peer.address}`);
+
+    // TODO: store neighbor addresses in memory registery object, and monitor/retry connection to them
+    const neighbors = await peer.requestNeighbors();
+    logger.info(
+      `Received ${neighbors.payload.neighbors.length} neighbors from peer: ${peer.address}`
+    );
+    neighbors.payload.neighbors.forEach((neighbor) => {
+      setImmediate(() => {
+        const peerEndpoint = new PeerEndpoint(
+          neighbor.addrbytes.ip_address,
+          neighbor.port
+        );
+        StacksPeer.connectOutbound(peerEndpoint, metrics).catch((error) => {
+          logger.error(error, `Error connecting to peer: ${peerEndpoint}`);
+        });
+      });
     });
     return peer;
   }
