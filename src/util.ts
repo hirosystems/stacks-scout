@@ -30,6 +30,9 @@ const schema = Type.Object({
   CONTROL_PLANE_HOST: Type.String({ default: '0.0.0.0' }),
   CONTROL_PLANE_PORT: Type.Number({ default: 30444 }),
 
+  PROMETHEUS_HOST: Type.String({ default: '0.0.0.0' }),
+  PROMETHEUS_PORT: Type.Number({ default: 9153 }),
+
   DATA_PLANE_PUBLIC_URL: Type.String({
     default: 'http://127.0.0.1:30443',
     description:

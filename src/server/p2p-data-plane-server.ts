@@ -1,9 +1,10 @@
 import fastify from 'fastify';
-import { getBtcChainInfo } from './bitcoin-net';
-import { getStacksNodeInfo } from './stacks-rpc';
-import { ENV, logger } from './util';
+import { ENV, logger } from '../util';
+import { getBtcChainInfo } from '../bitcoin-net';
+import { getStacksNodeInfo } from '../stacks-rpc';
+import { StacksPeerMetrics } from './prometheus-server';
 
-export async function startDataPlanServer() {
+export async function startDataPlaneServer(metrics: StacksPeerMetrics) {
   const server = fastify({ logger });
 
   /*

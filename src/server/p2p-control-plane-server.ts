@@ -1,13 +1,14 @@
 import * as net from 'node:net';
-import { ENV, logger } from './util';
-import { PeerDirection, StacksPeer } from './peer-handler';
+import { StacksPeer, PeerDirection } from '../peer-handler';
+import { logger, ENV } from '../util';
+import { StacksPeerMetrics } from './prometheus-server';
 
-export async function startControlPlaneServer() {
+export async function startControlPlaneServer(metrics: StacksPeerMetrics) {
   const server = net.createServer();
 
   server.on('connection', (socket) => {
     try {
-      handleNewInboundSocket(socket);
+      handleNewInboundSocket(socket, metrics);
     } catch (error) {
       logger.error(error, 'Error handling new control-plane socket connection');
     }
@@ -39,8 +40,11 @@ export async function startControlPlaneServer() {
   return server;
 }
 
-function handleNewInboundSocket(socket: net.Socket) {
+function handleNewInboundSocket(
+  socket: net.Socket,
+  metrics: StacksPeerMetrics
+) {
   const socketAddr = `${socket.remoteAddress}:${socket.remotePort}`;
   logger.info(`New control-plane inbound socket connection from ${socketAddr}`);
-  new StacksPeer(socket, PeerDirection.Inbound);
+  new StacksPeer(socket, PeerDirection.Inbound, metrics);
 }
