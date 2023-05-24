@@ -13,6 +13,7 @@ import { randomBytes } from 'node:crypto';
 import * as secp256k1 from 'secp256k1';
 import { getBtcBlockHashByHeight, getBtcChainInfo } from './bitcoin-net';
 import { StacksPeerMetrics } from './server/prometheus-server';
+import { StacksMessageContainerTypeID } from './stacks-p2p-deser';
 
 // From src/core/mod.rs
 
@@ -196,8 +197,12 @@ export class StacksPeer extends EventEmitter {
       logger.debug(receivedMsg, 'got peer message');
       this.emit('messageReceived', receivedMsg);
 
-      // EXAMPLE metric manipulation
-      // this.metrics.stacks_scout_discovered_nodes.inc();
+      // TODO: Move this to an external obj that listens to `messageReceived`
+      // switch (receivedMsg.payload.containerType) {
+      //   case StacksMessageContainerTypeID.Blocks:
+      //     //
+      //     break;
+      // }
 
       if (lastChunk.length > 0) {
         // if there's more data, recursively handle it
