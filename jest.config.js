@@ -6,3 +6,5 @@ module.exports = {
   verbose: true,
   cache: false,
 };
+
+process.env.STACKS_NETWORK_NAME = 'regtest';
