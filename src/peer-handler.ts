@@ -71,7 +71,11 @@ export class StacksPeer {
 
   private listen() {
     this.socket.on('data', (data) => {
-      logger.debug(data, 'got peer data');
+      const byteStream = new ResizableByteStream();
+      byteStream.writeBytes(data);
+      byteStream.seek(0);
+      const receivedMsg = StacksMessageEnvelope.decode(byteStream);
+      logger.debug(receivedMsg, 'got peer message');
     });
     this.socket.on('error', (err) => {
       logger.error(err, 'Error on peer socket');
