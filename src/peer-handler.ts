@@ -12,8 +12,29 @@ import { randomBytes } from 'node:crypto';
 import * as secp256k1 from 'secp256k1';
 
 // From src/core/mod.rs
-const PEER_VERSION_MAINNET = 0x18000006;
-const PEER_VERSION_TESTNET = 0xfacade06;
+
+// peer version (big-endian)
+// first byte == major network protocol version (currently 0x18)
+// second and third bytes are unused
+// fourth byte == highest epoch supported by this node
+const PEER_VERSION_MAINNET_MAJOR = 0x18000000;
+const PEER_VERSION_TESTNET_MAJOR = 0xfacade00;
+
+const PEER_VERSION_EPOCH_1_0 = 0x00;
+const PEER_VERSION_EPOCH_2_0 = 0x00;
+const PEER_VERSION_EPOCH_2_05 = 0x05;
+const PEER_VERSION_EPOCH_2_1 = 0x06;
+const PEER_VERSION_EPOCH_2_2 = 0x07;
+const PEER_VERSION_EPOCH_2_3 = 0x08;
+const PEER_VERSION_EPOCH_2_4 = 0x09;
+
+// this should be updated to the latest network epoch version supported by this node
+const PEER_NETWORK_EPOCH = PEER_VERSION_EPOCH_2_4;
+
+// set the fourth byte of the peer version
+const PEER_VERSION_MAINNET = PEER_VERSION_MAINNET_MAJOR | PEER_NETWORK_EPOCH;
+const PEER_VERSION_TESTNET = PEER_VERSION_TESTNET_MAJOR | PEER_NETWORK_EPOCH;
+
 const NETWORK_ID_MAINNET = 0x00000001;
 const NETWORK_ID_TESTNET = 0x80000000;
 
