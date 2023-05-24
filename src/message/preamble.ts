@@ -131,13 +131,11 @@ export class Preamble implements Encodeable {
    * 7. Calculate the recoverable secp256k1 signature from the SHA256
    */
   sign(privKey: Buffer, envelopeStream: ResizableByteStream): void {
+    this.signature = MessageSignature.empty();
+
     // Zero-out the old signature so we can calculate a new one.
     const preambleStream = new ResizableByteStream();
-    const oldSignature = this.signature;
-    this.signature = MessageSignature.empty();
-    this.signature.encode(preambleStream);
-    this.signature = oldSignature;
-
+    this.encode(preambleStream);
     const sha512_256 = createHash('sha512-256')
       .update(preambleStream.asBuffer())
       .update(envelopeStream.asBuffer())
