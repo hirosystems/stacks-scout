@@ -71,7 +71,17 @@ export class StacksPeer {
 
   private listen() {
     this.socket.on('data', (data) => {
-      console.log('got data', data);
+      logger.debug(data, 'got peer data');
+    });
+    this.socket.on('error', (err) => {
+      logger.error(err, 'Error on peer socket');
+    });
+    this.socket.on('close', (hadError) => {
+      if (hadError) {
+        logger.error(`Peer closed connection with error: ${this.address}`);
+      } else {
+        logger.info(`Peer closed connection: ${this.address}`);
+      }
     });
   }
 
