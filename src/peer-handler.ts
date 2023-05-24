@@ -10,6 +10,7 @@ import { Handshake } from './message/handshake';
 import { Preamble } from './message/preamble';
 import { randomBytes } from 'node:crypto';
 import * as secp256k1 from 'secp256k1';
+import { getBtcBlockHashByHeight, getBtcChainInfo } from './bitcoin-net';
 
 // From src/core/mod.rs
 
@@ -38,6 +39,10 @@ const PEER_VERSION_TESTNET = PEER_VERSION_TESTNET_MAJOR | PEER_NETWORK_EPOCH;
 const NETWORK_ID_MAINNET = 0x00000001;
 const NETWORK_ID_TESTNET = 0x80000000;
 
+const STABLE_CONFIRMATIONS_MAINNET = 7;
+const STABLE_CONFIRMATIONS_TESTNET = 7;
+const STABLE_CONFIRMATIONS_REGTEST = 1;
+
 export class StacksPeer {
   readonly socket: net.Socket;
   readonly address: PeerEndpoint;
@@ -59,7 +64,9 @@ export class StacksPeer {
     this.pubKey = Buffer.from(secp256k1.publicKeyCreate(this.privKey));
     this.socket = socket;
     this.listen();
-    this.initHandshake();
+    this.initHandshake().catch((error) => {
+      logger.error(error, 'Error initializing handshake');
+    });
   }
 
   private listen() {
@@ -68,7 +75,38 @@ export class StacksPeer {
     });
   }
 
-  private initHandshake() {
+  private async initHandshake() {
+    let peerVersion: number;
+    let networkID: number;
+    let stableConfirmations: number;
+
+    switch (ENV.STACKS_NETWORK_NAME) {
+      case 'mainnet':
+        peerVersion = PEER_VERSION_MAINNET;
+        networkID = NETWORK_ID_MAINNET;
+        stableConfirmations = STABLE_CONFIRMATIONS_MAINNET;
+        break;
+      case 'testnet':
+        peerVersion = PEER_VERSION_TESTNET;
+        networkID = NETWORK_ID_TESTNET;
+        stableConfirmations = STABLE_CONFIRMATIONS_TESTNET;
+        break;
+      case 'regtest':
+        peerVersion = PEER_VERSION_TESTNET;
+        networkID = NETWORK_ID_TESTNET;
+        stableConfirmations = STABLE_CONFIRMATIONS_REGTEST;
+        break;
+    }
+
+    const btcChainInfo = await getBtcChainInfo();
+    const btcStableBurnHeight = btcChainInfo.blocks - stableConfirmations;
+    const latestBtcBlockHash = await getBtcBlockHashByHeight(
+      btcChainInfo.blocks
+    );
+    const stableBtcBlockHash = await getBtcBlockHashByHeight(
+      btcStableBurnHeight
+    );
+
     const handshake = new Handshake(
       new PeerAddress('00000000000000000000ffff7f000001'), // 127.0.0.1 -> IPv6
       ENV.CONTROL_PLANE_PORT,
@@ -77,28 +115,18 @@ export class StacksPeer {
       100000n,
       'http://test.local'
     );
+
     const preamble = new Preamble(
-      ENV.STACKS_NETWORK_NAME === 'mainnet'
-        ? PEER_VERSION_MAINNET
-        : PEER_VERSION_TESTNET,
-      ENV.STACKS_NETWORK_NAME === 'mainnet'
-        ? NETWORK_ID_MAINNET
-        : NETWORK_ID_TESTNET,
-      0,
-      // TODO: This block height must be from the current Stacks epoch (2.3)
-      10n,
-      new BurnchainHeaderHash(
-        '0000000000000000000435785429211dca22ed6e2444800c88ad042eb0cc0e94'
-      ),
-      // TODO: This should be `burn_block_height` - 7
-      3n,
-      new BurnchainHeaderHash(
-        '000000000000000000050bcb25b81adaa1f2138dfd58e05634544b2e77a3dcbb'
-      ),
-      0,
-      // Signature and length will be calculated later
-      new MessageSignature('dd'.repeat(65)),
-      0
+      /* peer_version */ peerVersion,
+      /* network_id */ networkID,
+      /* seq */ 0,
+      /* burn_block_height */ BigInt(btcChainInfo.blocks),
+      /* burn_header_hash */ new BurnchainHeaderHash(latestBtcBlockHash),
+      /* stable_burn_block_height */ BigInt(btcStableBurnHeight),
+      /* stable_burn_header_hash */ new BurnchainHeaderHash(stableBtcBlockHash),
+      /* additional_data */ 0,
+      /* signature */ MessageSignature.empty(),
+      /* payload_len */ 0
     );
     const envelope = new StacksMessageEnvelope(
       preamble,
