@@ -47,7 +47,7 @@ function handleNewInboundSocket(
   const socketAddr = `${socket.remoteAddress}:${socket.remotePort}`;
   logger.info(`New control-plane inbound socket connection from ${socketAddr}`);
   const peer = new StacksPeer(socket, PeerDirection.Inbound, metrics);
-  peer.initHandshake().catch((error) => {
+  peer.performHandshake().catch((error) => {
     logger.error(error, 'Error initializing handshake');
   });
 }

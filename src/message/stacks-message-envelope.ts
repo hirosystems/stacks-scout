@@ -3,7 +3,11 @@ import * as secp256k1 from 'secp256k1';
 
 import { Preamble } from './preamble';
 import { ResizableByteStream } from '../resizable-byte-stream';
-import { Encodeable, StacksMessageTypedContainer } from '../stacks-p2p-deser';
+import {
+  Encodeable,
+  StacksMessageTypedContainer,
+  StacksMessageContainerType,
+} from '../stacks-p2p-deser';
 import { RelayDataVec } from './relay-data';
 import { MessageSignature } from './message-signature';
 
@@ -11,19 +15,18 @@ import { MessageSignature } from './message-signature';
  * This is called just "StacksMessage" in the SIP, using "envelope" for disambiguation.
  * All Stacks messages are represented as:
  */
-export class StacksMessageEnvelope implements Encodeable {
+export class StacksMessageEnvelope<
+  TPayload extends StacksMessageContainerType = StacksMessageContainerType
+> implements Encodeable
+{
   /** A fixed-length preamble which describes some metadata about the peer's view of the network. */
   readonly preamble: Preamble;
   /** A variable-length but bound-sized relayers vector which describes the order of peers that relayed a message. */
   readonly relayers: RelayDataVec;
   /** A variable-length payload, which encodes a specific peer message as a typed container. */
-  readonly payload: StacksMessageTypedContainer;
+  readonly payload: TPayload;
 
-  constructor(
-    preamble: Preamble,
-    relayers: RelayDataVec,
-    payload: StacksMessageTypedContainer
-  ) {
+  constructor(preamble: Preamble, relayers: RelayDataVec, payload: TPayload) {
     this.preamble = preamble;
     this.relayers = relayers;
     this.payload = payload;
