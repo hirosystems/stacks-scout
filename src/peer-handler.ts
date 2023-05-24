@@ -13,6 +13,7 @@ import { randomBytes } from 'node:crypto';
 import * as secp256k1 from 'secp256k1';
 import { getBtcBlockHashByHeight, getBtcChainInfo } from './bitcoin-net';
 import { StacksPeerMetrics } from './server/prometheus-server';
+import { HandshakeData } from './message/handshake-data';
 
 // From src/core/mod.rs
 
@@ -243,12 +244,14 @@ export class StacksPeer extends EventEmitter {
     );
 
     const handshake = new Handshake(
-      new PeerAddress('00000000000000000000ffff7f000001'), // 127.0.0.1 -> IPv6
-      ENV.CONTROL_PLANE_PORT,
-      0x0001,
-      this.pubKey.toString('hex'),
-      100000n,
-      ENV.DATA_PLANE_PUBLIC_URL
+      new HandshakeData(
+        new PeerAddress('127.0.0.1'),
+        ENV.CONTROL_PLANE_PORT,
+        0x0001,
+        this.pubKey.toString('hex'),
+        100000n,
+        ENV.DATA_PLANE_PUBLIC_URL
+      )
     );
 
     const preamble = new Preamble(
