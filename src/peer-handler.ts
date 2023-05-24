@@ -14,8 +14,8 @@ import * as secp256k1 from 'secp256k1';
 // From src/core/mod.rs
 const PEER_VERSION_MAINNET = 0x18000006;
 const PEER_VERSION_TESTNET = 0xfacade06;
-const NETWORK_ID_MAINNET = 0x17000000;
-const NETWORK_ID_TESTNET = 0xff000000;
+const NETWORK_ID_MAINNET = 0x00000001;
+const NETWORK_ID_TESTNET = 0x80000000;
 
 export class StacksPeer {
   readonly socket: net.Socket;
@@ -57,8 +57,12 @@ export class StacksPeer {
       'http://test.local'
     );
     const preamble = new Preamble(
-      PEER_VERSION_MAINNET,
-      NETWORK_ID_MAINNET,
+      ENV.STACKS_NETWORK_NAME === 'mainnet'
+        ? PEER_VERSION_MAINNET
+        : PEER_VERSION_TESTNET,
+      ENV.STACKS_NETWORK_NAME === 'mainnet'
+        ? NETWORK_ID_MAINNET
+        : NETWORK_ID_TESTNET,
       0,
       // TODO: This block height must be from the current Stacks epoch (2.3)
       10n,
