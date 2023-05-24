@@ -1,9 +1,11 @@
-import { ResizableByteStream } from '../resizable-byte-stream';
+import { INT_SIZE, ResizableByteStream } from '../resizable-byte-stream';
 import { Encodeable } from '../stacks-p2p-deser';
 import { MessageSignature } from './message-signature';
 import { BurnchainHeaderHash } from './burnchain-header-hash';
 
 export class Preamble implements Encodeable {
+  static readonly BYTE_SIZE = 165;
+
   /**
    * (u32)
    * A 4-byte scalar to encode the semantic version of this software.
@@ -113,5 +115,15 @@ export class Preamble implements Encodeable {
     target.writeUint32(this.additional_data);
     this.signature.encode(target);
     target.writeUint32(this.payload_len);
+  }
+
+  /** Read only the `payload_len` value out of a byte aray that encodes a Preamble */
+  static readPayloadLength(buffer: Uint8Array): number {
+    const view = new DataView(
+      buffer.buffer,
+      buffer.byteOffset,
+      buffer.byteLength
+    );
+    return view.getUint32(this.BYTE_SIZE - INT_SIZE.I32);
   }
 }

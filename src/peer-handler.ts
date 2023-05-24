@@ -80,6 +80,7 @@ interface StacksPeerEvents {
   closed: (error?: Error) => void | Promise<void>;
   socketError: (error: Error) => void | Promise<void>;
   open: () => void | Promise<void>;
+  messageReceived: (message: StacksMessageEnvelope) => void | Promise<void>;
 }
 
 export class StacksPeer extends EventEmitter {
@@ -113,11 +114,6 @@ export class StacksPeer extends EventEmitter {
     this.socket = socket;
     this.listen();
     peerConnections.register(this);
-
-    // TODO: should this be called in the constructor? might be better for caller to invoke this
-    this.initHandshake().catch((error) => {
-      logger.error(error, 'Error initializing handshake');
-    });
   }
 
   on<T extends keyof StacksPeerEvents>(
@@ -125,6 +121,13 @@ export class StacksPeer extends EventEmitter {
     listener: StacksPeerEvents[T]
   ): this {
     return super.on(eventName, listener);
+  }
+
+  once<T extends keyof StacksPeerEvents>(
+    eventName: T,
+    listener: StacksPeerEvents[T]
+  ): this {
+    return super.once(eventName, listener);
   }
 
   emit<T extends keyof StacksPeerEvents>(
@@ -135,15 +138,7 @@ export class StacksPeer extends EventEmitter {
   }
 
   private listen() {
-    this.socket.on('data', (data) => {
-      const byteStream = new ResizableByteStream();
-      byteStream.writeBytes(data);
-      byteStream.seek(0);
-      const receivedMsg = StacksMessageEnvelope.decode(byteStream);
-      logger.debug(receivedMsg, 'got peer message');
-      // EXAMPLE metric manipulation
-      // this.metrics.stacks_scout_discovered_nodes.inc();
-    });
+    this.setupDataReader();
     this.socket.on('error', (err) => {
       logger.error(err, 'Error on peer socket');
       this.emit('socketError', err);
@@ -158,7 +153,64 @@ export class StacksPeer extends EventEmitter {
     });
   }
 
-  private async initHandshake() {
+  private setupDataReader() {
+    // the left over data from the last received chunk
+    let lastChunk = Buffer.alloc(0);
+
+    const handleRecvData = (data: Buffer) => {
+      // Read in chunks to get first the preamble (fixed size),
+      // then get the payload size from the preamble and read that.
+      // Then write any extra bytes into a new byte stream.
+      const buff =
+        lastChunk.length === 0 ? data : Buffer.concat([lastChunk, data]);
+
+      if (buff.length < Preamble.BYTE_SIZE) {
+        // not enough data yet to read a message, save the chunk and wait for more
+        lastChunk = buff;
+        return;
+      }
+
+      const payloadLength = Preamble.readPayloadLength(buff);
+      if (buff.length < payloadLength + Preamble.BYTE_SIZE) {
+        // not enough data yet to read a message, save the chunk and wait for more
+        lastChunk = buff;
+        return;
+      }
+
+      // we have enough data to read a message, decode into a StacksMessageEnvelope
+      const byteStream = new ResizableByteStream();
+      byteStream.writeBytes(buff);
+      byteStream.seek(0);
+      const receivedMsg = StacksMessageEnvelope.decode(byteStream);
+
+      if (buff.length > byteStream.position) {
+        // extra data left over after reading the message, save it for next time
+        lastChunk = byteStream.readBytesAsBuffer(
+          byteStream.byteLength - byteStream.position
+        );
+      } else {
+        // no extra data left over
+        lastChunk = Buffer.alloc(0);
+      }
+
+      logger.debug(receivedMsg, 'got peer message');
+      this.emit('messageReceived', receivedMsg);
+
+      // EXAMPLE metric manipulation
+      // this.metrics.stacks_scout_discovered_nodes.inc();
+
+      if (lastChunk.length > 0) {
+        // if there's more data, recursively handle it
+        handleRecvData(Buffer.alloc(0));
+      }
+    };
+
+    this.socket.on('data', (data) => {
+      handleRecvData(data);
+    });
+  }
+
+  async initHandshake() {
     let peerVersion: number;
     let networkID: number;
     let stableConfirmations: number;
@@ -260,6 +312,9 @@ export class StacksPeer extends EventEmitter {
     });
     const peer = new this(socket, PeerDirection.Outbound, metrics);
     logger.info(`Connected to Stacks peer: ${peer.address}`);
+    peer.initHandshake().catch((error) => {
+      logger.error(error, 'Error initializing handshake');
+    });
     return peer;
   }
 }

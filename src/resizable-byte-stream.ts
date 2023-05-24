@@ -4,7 +4,7 @@ const DEFAULT_MAX_SIZE = 32 * 1024 * 1024;
 // Initial size is 500 kilobytes by default
 const DEFAULT_INITIAL_SIZE = 500 * 1024;
 
-const enum INT_SIZE {
+export const enum INT_SIZE {
   I8 = 1,
   I16 = 2,
   I32 = 4,
@@ -15,6 +15,7 @@ export class ResizableByteStream {
   readonly arrayBuffer: ArrayBuffer;
   private dataView: DataView;
   private cursor = 0;
+  private byteSize = 0;
 
   constructor(initialSize = DEFAULT_INITIAL_SIZE, maxSize = DEFAULT_MAX_SIZE) {
     // @ts-expect-error - maxByteLength is not in the types yet
@@ -48,6 +49,11 @@ export class ResizableByteStream {
     return this.cursor;
   }
 
+  /** Total number of bytes written */
+  get byteLength() {
+    return this.byteSize;
+  }
+
   seek(offset: number) {
     this.cursor = offset;
   }
@@ -56,48 +62,56 @@ export class ResizableByteStream {
     this.growToFit(INT_SIZE.I8);
     this.dataView.setUint8(this.cursor, value);
     this.cursor += INT_SIZE.I8;
+    this.byteSize += INT_SIZE.I8;
   }
 
   writeInt8(value: number) {
     this.growToFit(INT_SIZE.I8);
     this.dataView.setInt8(this.cursor, value);
     this.cursor += INT_SIZE.I8;
+    this.byteSize += INT_SIZE.I8;
   }
 
   writeUint16(value: number, littleEndian?: boolean) {
     this.growToFit(INT_SIZE.I16);
     this.dataView.setUint16(this.cursor, value, littleEndian);
     this.cursor += INT_SIZE.I16;
+    this.byteSize += INT_SIZE.I16;
   }
 
   writeInt16(value: number, littleEndian?: boolean) {
     this.growToFit(INT_SIZE.I16);
     this.dataView.setInt16(this.cursor, value, littleEndian);
     this.cursor += INT_SIZE.I16;
+    this.byteSize += INT_SIZE.I16;
   }
 
   writeUint32(value: number, littleEndian?: boolean) {
     this.growToFit(INT_SIZE.I32);
     this.dataView.setUint32(this.cursor, value, littleEndian);
     this.cursor += INT_SIZE.I32;
+    this.byteSize += INT_SIZE.I32;
   }
 
   writeInt32(value: number, littleEndian?: boolean) {
     this.growToFit(INT_SIZE.I32);
     this.dataView.setInt32(this.cursor, value, littleEndian);
     this.cursor += INT_SIZE.I32;
+    this.byteSize += INT_SIZE.I32;
   }
 
   writeUint64(value: bigint, littleEndian?: boolean) {
     this.growToFit(INT_SIZE.I64);
     this.dataView.setBigUint64(this.cursor, value, littleEndian);
     this.cursor += INT_SIZE.I64;
+    this.byteSize += INT_SIZE.I64;
   }
 
   writeInt64(value: bigint, littleEndian?: boolean) {
     this.growToFit(INT_SIZE.I64);
     this.dataView.setBigInt64(this.cursor, value, littleEndian);
     this.cursor += INT_SIZE.I64;
+    this.byteSize += INT_SIZE.I64;
   }
 
   writeBytes(bytes: Uint8Array | ArrayBuffer) {
@@ -105,6 +119,7 @@ export class ResizableByteStream {
     this.growToFit(buff.byteLength);
     new Uint8Array(this.arrayBuffer, this.cursor).set(buff);
     this.cursor += buff.byteLength;
+    this.byteSize += buff.byteLength;
   }
 
   writeBytesFromHexString(hex: string) {
@@ -209,6 +224,17 @@ export class ResizableByteStream {
   readBytesCopied(length: number): Uint8Array {
     const value = this.readBytes(length);
     return new Uint8Array(value);
+  }
+
+  readBytesAsBuffer(length: number): Buffer {
+    const value = this.readBytes(length);
+    return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  }
+
+  /** Same as `readBytesAsBuffer` but creates a copy in memory */
+  readBytesAsBufferCopied(length: number): Buffer {
+    const value = this.readBytes(length);
+    return Buffer.from(value);
   }
 
   readBytesAsHexString(length: number): string {
