@@ -30,6 +30,12 @@ const schema = Type.Object({
   CONTROL_PLANE_HOST: Type.String({ default: '0.0.0.0' }),
   CONTROL_PLANE_PORT: Type.Number({ default: 30444 }),
 
+  DATA_PLANE_PUBLIC_URL: Type.String({
+    default: 'http://127.0.0.1:30443',
+    description:
+      'Publicly routable URL to the data plane server, should correspond to the DATA_PLANE_HOST:DATA_PLANE_PORT config.',
+  }),
+
   BITCOIND_HOST: Type.String({ default: '127.0.0.1' }),
   BITCOIND_PORT: Type.Number({ default: 18443 }),
 

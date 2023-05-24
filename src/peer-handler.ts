@@ -1,4 +1,5 @@
 import * as net from 'node:net';
+import { EventEmitter } from 'node:events';
 import { ENV, WeakDictionary, logger } from './util';
 import { PeerAddress } from './message/peer-address';
 import { RelayDataVec } from './message/relay-data';
@@ -43,8 +44,46 @@ const STABLE_CONFIRMATIONS_MAINNET = 7;
 const STABLE_CONFIRMATIONS_TESTNET = 7;
 const STABLE_CONFIRMATIONS_REGTEST = 1;
 
-export class StacksPeer {
+export enum PeerDirection {
+  Inbound,
+  Outbound,
+}
+
+export const peerConnections = new (class PeerConnections {
+  readonly peers = new Set<StacksPeer>();
+  register(peer: StacksPeer) {
+    this.peers.add(peer);
+    peer.on('closed', () => {
+      this.peers.delete(peer);
+    });
+  }
+  inboundCount() {
+    return this.getInbound().length;
+  }
+  outboundCount() {
+    return this.getOutbound().length;
+  }
+  getInbound(): StacksPeer[] {
+    return [...this.peers].filter(
+      (peer) => peer.direction === PeerDirection.Inbound
+    );
+  }
+  getOutbound(): StacksPeer[] {
+    return [...this.peers].filter(
+      (peer) => peer.direction === PeerDirection.Outbound
+    );
+  }
+})();
+
+interface StacksPeerEvents {
+  closed: (error?: Error) => void | Promise<void>;
+  socketError: (error: Error) => void | Promise<void>;
+  open: () => void | Promise<void>;
+}
+
+export class StacksPeer extends EventEmitter {
   readonly socket: net.Socket;
+  readonly direction: PeerDirection;
   readonly address: PeerEndpoint;
   /** This peer's private key */
   readonly privKey: Buffer;
@@ -53,7 +92,9 @@ export class StacksPeer {
   /** epoch in milliseconds, zero for never */
   lastSeen = 0;
 
-  constructor(socket: net.Socket) {
+  constructor(socket: net.Socket, direction: PeerDirection) {
+    super();
+    this.direction = direction;
     this.address = new PeerEndpoint(
       socket.remoteAddress as string,
       socket.remotePort as number
@@ -64,9 +105,26 @@ export class StacksPeer {
     this.pubKey = Buffer.from(secp256k1.publicKeyCreate(this.privKey));
     this.socket = socket;
     this.listen();
+    peerConnections.register(this);
+
+    // TODO: should this be called in the constructor? might be better for caller to invoke this
     this.initHandshake().catch((error) => {
       logger.error(error, 'Error initializing handshake');
     });
+  }
+
+  on<T extends keyof StacksPeerEvents>(
+    eventName: T,
+    listener: StacksPeerEvents[T]
+  ): this {
+    return super.on(eventName, listener);
+  }
+
+  emit<T extends keyof StacksPeerEvents>(
+    eventName: T,
+    ...args: Parameters<StacksPeerEvents[T]>
+  ): boolean {
+    return super.emit(eventName, ...args);
   }
 
   private listen() {
@@ -79,6 +137,7 @@ export class StacksPeer {
     });
     this.socket.on('error', (err) => {
       logger.error(err, 'Error on peer socket');
+      this.emit('socketError', err);
     });
     this.socket.on('close', (hadError) => {
       if (hadError) {
@@ -86,6 +145,7 @@ export class StacksPeer {
       } else {
         logger.info(`Peer closed connection: ${this.address}`);
       }
+      this.emit('closed');
     });
   }
 
@@ -127,7 +187,7 @@ export class StacksPeer {
       0x0001,
       this.pubKey.toString('hex'),
       100000n,
-      'http://test.local'
+      ENV.DATA_PLANE_PUBLIC_URL
     );
 
     const preamble = new Preamble(
@@ -172,16 +232,23 @@ export class StacksPeer {
     address: PeerEndpoint
   ): Promise<StacksPeer> {
     const socket = await new Promise<net.Socket>((resolve, reject) => {
-      const socket = net.createConnection(address.port, address.ipAddress);
-      socket.on('connect', () => {
+      const socket = net.createConnection({
+        host: address.ipAddress,
+        port: address.port,
+      });
+      const onConnect = () => {
+        socket.removeListener('error', onError);
         resolve(socket);
-      });
-      socket.on('error', (err) => {
+      };
+      const onError = (error: Error) => {
+        socket.removeListener('connect', onConnect);
         socket.destroy();
-        reject(err);
-      });
+        reject(error);
+      };
+      socket.once('connect', onConnect);
+      socket.once('error', onError);
     });
-    const peer = new this(socket);
+    const peer = new this(socket, PeerDirection.Outbound);
     logger.info(`Connected to Stacks peer: ${peer.address}`);
     return peer;
   }
