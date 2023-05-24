@@ -1,42 +1,50 @@
-import fastify from 'fastify';
-import { getBtcChainInfo } from '../bitcoin-net';
-import { getStacksNodeInfo } from '../stacks-rpc';
-import { ENV, logger } from '../util';
+import * as net from 'node:net';
+import { StacksPeer, PeerDirection } from '../peer-handler';
+import { logger, ENV } from '../util';
+import { StacksPeerMetrics } from './prometheus-server';
 
-// TODO: use custom tcp server rather than http/fastify
+export async function startControlPlaneServer(metrics: StacksPeerMetrics) {
+  const server = net.createServer();
 
-export async function startControlPlaneServer() {
-  const server = fastify({ logger });
-
-  /*
-  server.get('/', async (request, reply) => {
-    const btcInfo = await getBitcoinChainInfo();
-    const stxInfo = await getStacksNodeInfo();
-    return {
-      btcInfo,
-      stxInfo,
-    };
-  });
-  */
-
-  server.route({
-    url: '*',
-    method: ['GET', 'POST', 'HEAD', 'PUT'],
-    handler: async (request, reply) => {
-      const btcInfo = await getBtcChainInfo();
-      const stxInfo = await getStacksNodeInfo();
-      return {
-        btcInfo,
-        stxInfo,
-      };
-    },
+  server.on('connection', (socket) => {
+    try {
+      handleNewInboundSocket(socket, metrics);
+    } catch (error) {
+      logger.error(error, 'Error handling new control-plane socket connection');
+    }
   });
 
-  const addr = await server.listen({
-    host: ENV.CONTROL_PLANE_HOST,
-    port: ENV.CONTROL_PLANE_PORT,
+  await new Promise<void>((resolve, reject) => {
+    server.on('error', (err) => {
+      logger.error(err, 'Control-plane server listen error');
+      reject(err);
+    });
+    server.listen(
+      {
+        host: ENV.CONTROL_PLANE_HOST,
+        port: ENV.CONTROL_PLANE_PORT,
+      },
+      () => {
+        resolve();
+      }
+    );
   });
 
-  logger.info(`Control-plane server running on ${addr}`);
+  const addr = server.address();
+  if (!addr) {
+    throw new Error('Control-plane server address is null or undefined');
+  }
+  const addrStr =
+    typeof addr === 'string' ? addr : `${addr.address}:${addr.port}`;
+  logger.info(`Control-plane server running on ${addrStr}`);
   return server;
+}
+
+function handleNewInboundSocket(
+  socket: net.Socket,
+  metrics: StacksPeerMetrics
+) {
+  const socketAddr = `${socket.remoteAddress}:${socket.remotePort}`;
+  logger.info(`New control-plane inbound socket connection from ${socketAddr}`);
+  new StacksPeer(socket, PeerDirection.Inbound, metrics);
 }

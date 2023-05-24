@@ -17,13 +17,13 @@ async function init() {
   await waitForRpcResponsive();
   await waitForBtcRestResponsive();
 
-  await startDataPlaneServer();
-  await startControlPlaneServer();
+  const metrics = new StacksPeerMetrics();
+  await startDataPlaneServer(metrics);
+  await startControlPlaneServer(metrics);
   await startPrometheusServer();
 
   await timeout(5000);
   const defaultStacksPeerAddr = getDefaultStacksNodePeerAddress();
-  const metrics = new StacksPeerMetrics();
   const stacksPeer = await StacksPeer.connectOutbound(
     defaultStacksPeerAddr,
     metrics
