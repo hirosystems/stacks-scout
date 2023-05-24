@@ -11,6 +11,7 @@ import { Preamble } from './message/preamble';
 import { randomBytes } from 'node:crypto';
 import * as secp256k1 from 'secp256k1';
 import { getBtcBlockHashByHeight, getBtcChainInfo } from './bitcoin-net';
+import { StacksPeerMetrics } from './server/prometheus-server';
 
 // From src/core/mod.rs
 
@@ -50,14 +51,16 @@ export class StacksPeer {
   readonly privKey: Buffer;
   /** This peer's public key */
   readonly pubKey: Buffer;
+  readonly metrics: StacksPeerMetrics;
   /** epoch in milliseconds, zero for never */
   lastSeen = 0;
 
-  constructor(socket: net.Socket) {
+  constructor(socket: net.Socket, metrics: StacksPeerMetrics) {
     this.address = new PeerEndpoint(
       socket.remoteAddress as string,
       socket.remotePort as number
     );
+    this.metrics = metrics;
     do {
       this.privKey = randomBytes(32);
     } while (!secp256k1.privateKeyVerify(this.privKey));
@@ -76,6 +79,8 @@ export class StacksPeer {
       byteStream.seek(0);
       const receivedMsg = StacksMessageEnvelope.decode(byteStream);
       logger.debug(receivedMsg, 'got peer message');
+      // EXAMPLE metric manipulation
+      // this.metrics.stacks_scout_discovered_nodes.inc();
     });
     this.socket.on('error', (err) => {
       logger.error(err, 'Error on peer socket');
@@ -169,7 +174,8 @@ export class StacksPeer {
   }
 
   public static async connectOutbound(
-    address: PeerEndpoint
+    address: PeerEndpoint,
+    metrics: StacksPeerMetrics
   ): Promise<StacksPeer> {
     const socket = await new Promise<net.Socket>((resolve, reject) => {
       const socket = net.createConnection(address.port, address.ipAddress);
@@ -181,7 +187,7 @@ export class StacksPeer {
         reject(err);
       });
     });
-    const peer = new this(socket);
+    const peer = new this(socket, metrics);
     logger.info(`Connected to Stacks peer: ${peer.address}`);
     return peer;
   }

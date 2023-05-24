@@ -1,16 +1,15 @@
-import {
-  getBtcBlockByHeight,
-  getBtcBlockHashByHeight,
-  getBtcChainInfo,
-  waitForBtcRestResponsive,
-} from './bitcoin-net';
-import { startControlPlaneServer } from './p2p-control-plane-server';
-import { startDataPlanServer } from './p2p-data-plane-server';
-import { PeerEndpoint, StacksPeer } from './peer-handler';
+import { waitForBtcRestResponsive } from './bitcoin-net';
+import { startControlPlaneServer } from './server/p2p-control-plane-server';
+import { StacksPeer } from './peer-handler';
 import { setupShutdownHandler } from './shutdown';
 import { getDefaultStacksNodePeerAddress } from './stacks-p2p';
 import { waitForRpcResponsive } from './stacks-rpc';
 import { logger, timeout } from './util';
+import { startDataPlaneServer } from './server/p2p-data-plane-server';
+import {
+  StacksPeerMetrics,
+  startPrometheusServer,
+} from './server/prometheus-server';
 
 async function init() {
   setupShutdownHandler();
@@ -18,29 +17,17 @@ async function init() {
   await waitForRpcResponsive();
   await waitForBtcRestResponsive();
 
-  await startDataPlanServer();
+  await startDataPlaneServer();
   await startControlPlaneServer();
-
-  /*
-  getBtcChainInfo()
-    .then((info) => {
-      logger.info(info);
-    })
-    .catch((err) => {
-      logger.error(err);
-    });
-  getBtcBlockByHeight(7)
-    .then((info) => {
-      logger.info(info);
-    })
-    .catch((err) => {
-      logger.error(err);
-    });
-  */
+  await startPrometheusServer();
 
   await timeout(5000);
   const defaultStacksPeerAddr = getDefaultStacksNodePeerAddress();
-  const stacksPeer = await StacksPeer.connectOutbound(defaultStacksPeerAddr);
+  const metrics = new StacksPeerMetrics();
+  const stacksPeer = await StacksPeer.connectOutbound(
+    defaultStacksPeerAddr,
+    metrics
+  );
 }
 
 init().catch((error) => {

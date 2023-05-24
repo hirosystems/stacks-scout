@@ -1,9 +1,9 @@
 import fastify from 'fastify';
-import { getBtcChainInfo } from './bitcoin-net';
-import { getStacksNodeInfo } from './stacks-rpc';
-import { ENV, logger } from './util';
+import { ENV, logger } from '../util';
+import { getBtcChainInfo } from '../bitcoin-net';
+import { getStacksNodeInfo } from '../stacks-rpc';
 
-export async function startDataPlanServer() {
+export async function startDataPlaneServer() {
   const server = fastify({ logger });
 
   /*

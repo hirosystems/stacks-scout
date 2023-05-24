@@ -1,7 +1,7 @@
 import fastify from 'fastify';
-import { getBtcChainInfo } from './bitcoin-net';
-import { getStacksNodeInfo } from './stacks-rpc';
-import { ENV, logger } from './util';
+import { getBtcChainInfo } from '../bitcoin-net';
+import { getStacksNodeInfo } from '../stacks-rpc';
+import { ENV, logger } from '../util';
 
 // TODO: use custom tcp server rather than http/fastify
 
