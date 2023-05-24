@@ -9,6 +9,7 @@ import { RelayDataVec } from '../message/relay-data';
 import { Handshake } from '../message/handshake';
 import { StacksMessageEnvelope } from '../message/stacks-message-envelope';
 import { ResizableByteStream } from '../resizable-byte-stream';
+import { StacksPeerMetrics } from '../server/prometheus-server';
 
 function createTestHandshakeMessage() {
   const preamble = new Preamble(
@@ -84,9 +85,18 @@ async function writeSocketFlushed(socket: net.Socket, data: Buffer) {
 }
 
 describe('peer socket reading', () => {
+  let stacksPeerMetrics: StacksPeerMetrics;
+  beforeAll(() => {
+    stacksPeerMetrics = new StacksPeerMetrics();
+  });
+
   it('should read exactly one message sent at a time', async () => {
     const { server, readerSocket, writerSocket } = await createTestSocket();
-    const peer = new StacksPeer(readerSocket, PeerDirection.Inbound);
+    const peer = new StacksPeer(
+      readerSocket,
+      PeerDirection.Inbound,
+      stacksPeerMetrics
+    );
 
     const msg = createTestHandshakeMessage();
     const msgByteStream = new ResizableByteStream();
@@ -114,7 +124,11 @@ describe('peer socket reading', () => {
 
   it('should ready multiple messages sent in one chunk', async () => {
     const { server, readerSocket, writerSocket } = await createTestSocket();
-    const peer = new StacksPeer(readerSocket, PeerDirection.Inbound);
+    const peer = new StacksPeer(
+      readerSocket,
+      PeerDirection.Inbound,
+      stacksPeerMetrics
+    );
 
     const msg = createTestHandshakeMessage();
     const msgByteStream = new ResizableByteStream();
@@ -155,7 +169,11 @@ describe('peer socket reading', () => {
     const { server, readerSocket, writerSocket } = await createTestSocket();
     writerSocket.setNoDelay(true);
 
-    const peer = new StacksPeer(readerSocket, PeerDirection.Inbound);
+    const peer = new StacksPeer(
+      readerSocket,
+      PeerDirection.Inbound,
+      stacksPeerMetrics
+    );
 
     const msg = createTestHandshakeMessage();
     const msgByteStream = new ResizableByteStream();

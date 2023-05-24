@@ -21,6 +21,7 @@
     "@sinclair/typebox": "0.28.10",
     "env-schema": "5.2.0",
     "fastify": "4.17.0",
+    "fastify-metrics": "10.3.0",
     "pino": "8.14.1",
     "secp256k1": "5.0.0",
     "undici": "5.22.1"

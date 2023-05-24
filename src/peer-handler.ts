@@ -12,6 +12,7 @@ import { Preamble } from './message/preamble';
 import { randomBytes } from 'node:crypto';
 import * as secp256k1 from 'secp256k1';
 import { getBtcBlockHashByHeight, getBtcChainInfo } from './bitcoin-net';
+import { StacksPeerMetrics } from './server/prometheus-server';
 
 // From src/core/mod.rs
 
@@ -90,16 +91,22 @@ export class StacksPeer extends EventEmitter {
   readonly privKey: Buffer;
   /** This peer's public key */
   readonly pubKey: Buffer;
+  readonly metrics: StacksPeerMetrics;
   /** epoch in milliseconds, zero for never */
   lastSeen = 0;
 
-  constructor(socket: net.Socket, direction: PeerDirection) {
+  constructor(
+    socket: net.Socket,
+    direction: PeerDirection,
+    metrics: StacksPeerMetrics
+  ) {
     super();
     this.direction = direction;
     this.address = new PeerEndpoint(
       socket.remoteAddress as string,
       socket.remotePort as number
     );
+    this.metrics = metrics;
     do {
       this.privKey = randomBytes(32);
     } while (!secp256k1.privateKeyVerify(this.privKey));
@@ -188,6 +195,9 @@ export class StacksPeer extends EventEmitter {
 
       logger.debug(receivedMsg, 'got peer message');
       this.emit('messageReceived', receivedMsg);
+
+      // EXAMPLE metric manipulation
+      // this.metrics.stacks_scout_discovered_nodes.inc();
 
       if (lastChunk.length > 0) {
         // if there's more data, recursively handle it
@@ -280,7 +290,8 @@ export class StacksPeer extends EventEmitter {
   }
 
   public static async connectOutbound(
-    address: PeerEndpoint
+    address: PeerEndpoint,
+    metrics: StacksPeerMetrics
   ): Promise<StacksPeer> {
     const socket = await new Promise<net.Socket>((resolve, reject) => {
       const socket = net.createConnection({
@@ -299,7 +310,7 @@ export class StacksPeer extends EventEmitter {
       socket.once('connect', onConnect);
       socket.once('error', onError);
     });
-    const peer = new this(socket, PeerDirection.Outbound);
+    const peer = new this(socket, PeerDirection.Outbound, metrics);
     logger.info(`Connected to Stacks peer: ${peer.address}`);
     peer.initHandshake().catch((error) => {
       logger.error(error, 'Error initializing handshake');
