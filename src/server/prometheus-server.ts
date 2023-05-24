@@ -5,21 +5,21 @@ import * as prom from 'prom-client';
 
 export class StacksPeerMetrics {
   /** Number of Stacks nodes discovered on the configured network */
-  stacks_scout_discovered_nodes: prom.Gauge;
+  readonly stacks_scout_discovered_nodes: prom.Gauge;
   /** Number of Stacks node miners discovered on the configured network */
-  stacks_scout_discovered_miners: prom.Gauge;
+  readonly stacks_scout_discovered_miners: prom.Gauge;
   /** Rate at which blocks propagate across the configured network */
-  stacks_scout_block_propagation_rate_bucket: prom.Histogram;
+  readonly stacks_scout_block_propagation_rate_bucket: prom.Histogram;
   /** Rate at which microblocks propagate across the configured network */
-  stacks_scout_microblock_propagation_rate_bucket: prom.Histogram;
+  readonly stacks_scout_microblock_propagation_rate_bucket: prom.Histogram;
   /** Rate at which mempool transactions propagate across the configured network */
-  stacks_scout_mempool_propagation_rate_bucket: prom.Histogram;
+  readonly stacks_scout_mempool_propagation_rate_bucket: prom.Histogram;
   /** Rate at which mempool transactions are being included in mined blocks for configured network */
-  stacks_scout_mempool_inclusion_rate_bucket: prom.Histogram;
+  readonly stacks_scout_mempool_inclusion_rate_bucket: prom.Histogram;
   /** Peer Stacks node versions */
-  stacks_scout_hardfork_version: prom.Gauge;
+  readonly stacks_scout_hardfork_version: prom.Gauge;
   /** Stacks node latency in milliseconds */
-  stacks_scout_node_request_duration_milliseconds_bucket: prom.Histogram;
+  readonly stacks_scout_node_request_duration_milliseconds_bucket: prom.Histogram;
 
   constructor() {
     this.stacks_scout_discovered_nodes = new prom.Gauge({
