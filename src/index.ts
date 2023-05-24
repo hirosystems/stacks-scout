@@ -4,7 +4,7 @@ import {
   getBtcChainInfo,
   waitForBtcRestResponsive,
 } from './bitcoin-net';
-import { startControlPlanServer } from './p2p-control-plane-server';
+import { startControlPlaneServer } from './p2p-control-plane-server';
 import { startDataPlanServer } from './p2p-data-plane-server';
 import { PeerEndpoint, StacksPeer } from './peer-handler';
 import { setupShutdownHandler } from './shutdown';
@@ -19,7 +19,7 @@ async function init() {
   await waitForBtcRestResponsive();
 
   await startDataPlanServer();
-  await startControlPlanServer();
+  await startControlPlaneServer();
 
   /*
   getBtcChainInfo()

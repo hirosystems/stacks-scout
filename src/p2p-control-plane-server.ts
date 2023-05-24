@@ -5,7 +5,7 @@ import { ENV, logger } from './util';
 
 // TODO: use custom tcp server rather than http/fastify
 
-export async function startControlPlanServer() {
+export async function startControlPlaneServer() {
   const server = fastify({ logger });
 
   /*

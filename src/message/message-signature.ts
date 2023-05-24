@@ -17,9 +17,15 @@ export class MessageSignature implements Encodeable {
     }
     this.signature = signature;
   }
+
+  static empty(): MessageSignature {
+    return new MessageSignature('00'.repeat(65));
+  }
+
   static decode(source: ResizableByteStream): MessageSignature {
     return new MessageSignature(source.readBytesAsHexString(65));
   }
+
   encode(target: ResizableByteStream): void {
     target.writeBytesFromHexString(this.signature);
   }

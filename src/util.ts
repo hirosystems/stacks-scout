@@ -38,6 +38,12 @@ const schema = Type.Object({
 
   STACKS_NODE_P2P_HOST: Type.String({ default: '127.0.0.1' }),
   STACKS_NODE_P2P_PORT: Type.Number({ default: 20444 }),
+
+  STACKS_NETWORK_NAME: Type.Union([
+    Type.Literal('mainnet'),
+    Type.Literal('testnet'),
+    Type.Literal('regtest'),
+  ]),
 });
 
 export const ENV = envSchema<Static<typeof schema>>({

@@ -1,18 +1,55 @@
 import * as net from 'node:net';
-import { WeakDictionary, logger } from './util';
+import { ENV, WeakDictionary, logger } from './util';
 import { PeerAddress } from './message/peer-address';
-import { NeighborAddress } from './message/neighbor-address';
-import { RelayData, RelayDataVec } from './message/relay-data';
+import { RelayDataVec } from './message/relay-data';
 import { MessageSignature } from './message/message-signature';
 import { BurnchainHeaderHash } from './message/burnchain-header-hash';
 import { StacksMessageEnvelope } from './message/stacks-message-envelope';
 import { ResizableByteStream } from './resizable-byte-stream';
 import { Handshake } from './message/handshake';
 import { Preamble } from './message/preamble';
+import { randomBytes } from 'node:crypto';
+import * as secp256k1 from 'secp256k1';
+import { getBtcBlockHashByHeight, getBtcChainInfo } from './bitcoin-net';
+
+// From src/core/mod.rs
+
+// peer version (big-endian)
+// first byte == major network protocol version (currently 0x18)
+// second and third bytes are unused
+// fourth byte == highest epoch supported by this node
+const PEER_VERSION_MAINNET_MAJOR = 0x18000000;
+const PEER_VERSION_TESTNET_MAJOR = 0xfacade00;
+
+const PEER_VERSION_EPOCH_1_0 = 0x00;
+const PEER_VERSION_EPOCH_2_0 = 0x00;
+const PEER_VERSION_EPOCH_2_05 = 0x05;
+const PEER_VERSION_EPOCH_2_1 = 0x06;
+const PEER_VERSION_EPOCH_2_2 = 0x07;
+const PEER_VERSION_EPOCH_2_3 = 0x08;
+const PEER_VERSION_EPOCH_2_4 = 0x09;
+
+// this should be updated to the latest network epoch version supported by this node
+const PEER_NETWORK_EPOCH = PEER_VERSION_EPOCH_2_4;
+
+// set the fourth byte of the peer version
+const PEER_VERSION_MAINNET = PEER_VERSION_MAINNET_MAJOR | PEER_NETWORK_EPOCH;
+const PEER_VERSION_TESTNET = PEER_VERSION_TESTNET_MAJOR | PEER_NETWORK_EPOCH;
+
+const NETWORK_ID_MAINNET = 0x00000001;
+const NETWORK_ID_TESTNET = 0x80000000;
+
+const STABLE_CONFIRMATIONS_MAINNET = 7;
+const STABLE_CONFIRMATIONS_TESTNET = 7;
+const STABLE_CONFIRMATIONS_REGTEST = 1;
 
 export class StacksPeer {
   readonly socket: net.Socket;
   readonly address: PeerEndpoint;
+  /** This peer's private key */
+  readonly privKey: Buffer;
+  /** This peer's public key */
+  readonly pubKey: Buffer;
   /** epoch in milliseconds, zero for never */
   lastSeen = 0;
 
@@ -21,63 +58,102 @@ export class StacksPeer {
       socket.remoteAddress as string,
       socket.remotePort as number
     );
+    do {
+      this.privKey = randomBytes(32);
+    } while (!secp256k1.privateKeyVerify(this.privKey));
+    this.pubKey = Buffer.from(secp256k1.publicKeyCreate(this.privKey));
     this.socket = socket;
     this.listen();
-    this.initHandshake();
+    this.initHandshake().catch((error) => {
+      logger.error(error, 'Error initializing handshake');
+    });
   }
 
   private listen() {
     this.socket.on('data', (data) => {
-      console.log('got data', data);
+      logger.debug(data, 'got peer data');
+    });
+    this.socket.on('error', (err) => {
+      logger.error(err, 'Error on peer socket');
+    });
+    this.socket.on('close', (hadError) => {
+      if (hadError) {
+        logger.error(`Peer closed connection with error: ${this.address}`);
+      } else {
+        logger.info(`Peer closed connection: ${this.address}`);
+      }
     });
   }
 
-  private initHandshake() {
-    // SO CLOSE! Stacks-node logs show that peer is connecting but message is invalid:
-    // WARN [1684796429.358610] [src/net/connection.rs:571] [p2p-(0.0.0.0:20444,0.0.0.0:20443)] Invalid message preamble: Burn block height 5 <= burn stable block height 6
-    // INFO [1684796429.358630] [src/net/chat.rs:1920] [p2p-(0.0.0.0:20444,0.0.0.0:20443)] convo:id=4,outbound=false,peer=UNKNOWN+UNKNOWN://192.168.128.1:48928: failed to recv on P2P conversation: InvalidMessage
+  private async initHandshake() {
+    let peerVersion: number;
+    let networkID: number;
+    let stableConfirmations: number;
 
-    // TODO: fill this with real/valid data
-    const neighborAddress = new NeighborAddress(
-      new PeerAddress('0f'.repeat(16)),
-      4000,
-      '0e'.repeat(20)
+    switch (ENV.STACKS_NETWORK_NAME) {
+      case 'mainnet':
+        peerVersion = PEER_VERSION_MAINNET;
+        networkID = NETWORK_ID_MAINNET;
+        stableConfirmations = STABLE_CONFIRMATIONS_MAINNET;
+        break;
+      case 'testnet':
+        peerVersion = PEER_VERSION_TESTNET;
+        networkID = NETWORK_ID_TESTNET;
+        stableConfirmations = STABLE_CONFIRMATIONS_TESTNET;
+        break;
+      case 'regtest':
+        peerVersion = PEER_VERSION_TESTNET;
+        networkID = NETWORK_ID_TESTNET;
+        stableConfirmations = STABLE_CONFIRMATIONS_REGTEST;
+        break;
+    }
+
+    const btcChainInfo = await getBtcChainInfo();
+    const btcStableBurnHeight = btcChainInfo.blocks - stableConfirmations;
+    const latestBtcBlockHash = await getBtcBlockHashByHeight(
+      btcChainInfo.blocks
     );
-    const relayData = new RelayData(neighborAddress, 455);
-    const relayVec = new RelayDataVec([relayData]);
+    const stableBtcBlockHash = await getBtcBlockHashByHeight(
+      btcStableBurnHeight
+    );
+
     const handshake = new Handshake(
-      new PeerAddress('0d'.repeat(16)),
-      5000,
-      0,
-      '0c'.repeat(33),
-      50n,
+      new PeerAddress('00000000000000000000ffff7f000001'), // 127.0.0.1 -> IPv6
+      ENV.CONTROL_PLANE_PORT,
+      0x0001,
+      this.pubKey.toString('hex'),
+      100000n,
       'http://test.local'
     );
 
-    // Encode the handshake to get the length
-    const handshakeByteStream = new ResizableByteStream();
-    handshake.encode(handshakeByteStream);
-    const handshakeLength = handshakeByteStream.position;
-
     const preamble = new Preamble(
-      123,
-      321,
-      4,
-      5n,
-      new BurnchainHeaderHash('ff'.repeat(32)),
-      6n,
-      new BurnchainHeaderHash('ee'.repeat(32)),
-      7,
-      new MessageSignature('dd'.repeat(65)),
-      handshakeLength
+      /* peer_version */ peerVersion,
+      /* network_id */ networkID,
+      /* seq */ 0,
+      /* burn_block_height */ BigInt(btcChainInfo.blocks),
+      /* burn_header_hash */ new BurnchainHeaderHash(latestBtcBlockHash),
+      /* stable_burn_block_height */ BigInt(btcStableBurnHeight),
+      /* stable_burn_header_hash */ new BurnchainHeaderHash(stableBtcBlockHash),
+      /* additional_data */ 0,
+      /* signature */ MessageSignature.empty(),
+      /* payload_len */ 0
     );
-    const envelope = new StacksMessageEnvelope(preamble, relayVec, handshake);
+    const envelope = new StacksMessageEnvelope(
+      preamble,
+      new RelayDataVec([]), // No relays, we're generating this message.
+      handshake
+    );
+    envelope.sign(this.privKey);
 
+    this.send(envelope);
+  }
+
+  async send(envelope: StacksMessageEnvelope) {
     const byteStream = new ResizableByteStream();
     envelope.encode(byteStream);
     this.socket.write(byteStream.asBuffer(), (err) => {
       if (err) {
-        logger.error(err, 'Error writing handshake');
+        logger.error(err, 'Error sending message');
       }
     });
   }
