@@ -42,5 +42,8 @@ export async function startControlPlaneServer() {
 function handleNewInboundSocket(socket: net.Socket) {
   const socketAddr = `${socket.remoteAddress}:${socket.remotePort}`;
   logger.info(`New control-plane inbound socket connection from ${socketAddr}`);
-  new StacksPeer(socket, PeerDirection.Inbound);
+  const peer = new StacksPeer(socket, PeerDirection.Inbound);
+  peer.initHandshake().catch((error) => {
+    logger.error(error, 'Error initializing handshake');
+  });
 }
