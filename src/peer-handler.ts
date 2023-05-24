@@ -1,8 +1,7 @@
 import * as net from 'node:net';
 import { ENV, WeakDictionary, logger } from './util';
 import { PeerAddress } from './message/peer-address';
-import { NeighborAddress } from './message/neighbor-address';
-import { RelayData, RelayDataVec } from './message/relay-data';
+import { RelayDataVec } from './message/relay-data';
 import { MessageSignature } from './message/message-signature';
 import { BurnchainHeaderHash } from './message/burnchain-header-hash';
 import { StacksMessageEnvelope } from './message/stacks-message-envelope';
@@ -12,11 +11,18 @@ import { Preamble } from './message/preamble';
 import { randomBytes } from 'node:crypto';
 import * as secp256k1 from 'secp256k1';
 
+// From src/core/mod.rs
+const PEER_VERSION_MAINNET = 0x18000006;
+const PEER_VERSION_TESTNET = 0xfacade06;
+const NETWORK_ID_MAINNET = 0x17000000;
+const NETWORK_ID_TESTNET = 0xff000000;
+
 export class StacksPeer {
   readonly socket: net.Socket;
   readonly address: PeerEndpoint;
-  /** This node's private key */
+  /** This peer's private key */
   readonly privKey: Buffer;
+  /** This peer's public key */
   readonly pubKey: Buffer;
   /** epoch in milliseconds, zero for never */
   lastSeen = 0;
@@ -42,47 +48,49 @@ export class StacksPeer {
   }
 
   private initHandshake() {
-    // SO CLOSE! Stacks-node logs show that peer is connecting but message is invalid:
-    // WARN [1684796429.358610] [src/net/connection.rs:571] [p2p-(0.0.0.0:20444,0.0.0.0:20443)] Invalid message preamble: Burn block height 5 <= burn stable block height 6
-    // INFO [1684796429.358630] [src/net/chat.rs:1920] [p2p-(0.0.0.0:20444,0.0.0.0:20443)] convo:id=4,outbound=false,peer=UNKNOWN+UNKNOWN://192.168.128.1:48928: failed to recv on P2P conversation: InvalidMessage
-
-    // TODO: fill this with real/valid data
     const handshake = new Handshake(
-      new PeerAddress('007f000000000001'), // 127.0.0.1
-      5000,
-      0,
+      new PeerAddress('00000000000000000000ffff7f000001'), // 127.0.0.1 -> IPv6
+      ENV.CONTROL_PLANE_PORT,
+      0x0001,
       this.pubKey.toString('hex'),
-      50n,
+      100000n,
       'http://test.local'
     );
     const preamble = new Preamble(
-      0x15000000,
-      0x15000001,
+      PEER_VERSION_MAINNET,
+      NETWORK_ID_MAINNET,
       0,
+      // TODO: This block height must be from the current Stacks epoch (2.3)
       10n,
       new BurnchainHeaderHash(
         '0000000000000000000435785429211dca22ed6e2444800c88ad042eb0cc0e94'
       ),
+      // TODO: This should be `burn_block_height` - 7
       3n,
       new BurnchainHeaderHash(
         '000000000000000000050bcb25b81adaa1f2138dfd58e05634544b2e77a3dcbb'
       ),
       0,
-      new MessageSignature('dd'.repeat(65)), // Will be calculated later
-      0 // Will be calculated later
+      // Signature and length will be calculated later
+      new MessageSignature('dd'.repeat(65)),
+      0
     );
     const envelope = new StacksMessageEnvelope(
       preamble,
-      new RelayDataVec([]), // Empty, we're generating this message.
+      new RelayDataVec([]), // No relays, we're generating this message.
       handshake
     );
     envelope.sign(this.privKey);
 
+    this.send(envelope);
+  }
+
+  async send(envelope: StacksMessageEnvelope) {
     const byteStream = new ResizableByteStream();
     envelope.encode(byteStream);
     this.socket.write(byteStream.asBuffer(), (err) => {
       if (err) {
-        logger.error(err, 'Error writing handshake');
+        logger.error(err, 'Error sending message');
       }
     });
   }
