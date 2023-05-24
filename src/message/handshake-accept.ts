@@ -4,7 +4,7 @@ import {
   Encodeable,
   StacksMessageContainerTypeID,
 } from '../stacks-p2p-deser';
-import { Handshake } from './handshake';
+import { HandshakeData } from './handshake-data';
 
 export class HandshakeAccept
   implements StacksMessageTypedContainer, Encodeable
@@ -13,14 +13,14 @@ export class HandshakeAccept
   readonly containerType = HandshakeAccept.containerType;
 
   /** The remote peer's handshake data */
-  readonly handshake: Handshake;
+  readonly handshake: HandshakeData;
   /**
    * (u32) Maximum number of seconds the recipient peer expects this peer
    * to wait between sending messages before the recipient will declare this peer as dead.
    */
   readonly heartbeat_interval: number;
 
-  constructor(handshake: Handshake, heartbeat_interval: number) {
+  constructor(handshake: HandshakeData, heartbeat_interval: number) {
     this.handshake = handshake;
     this.heartbeat_interval = heartbeat_interval;
   }
@@ -28,7 +28,10 @@ export class HandshakeAccept
     if (source.readUint8() !== this.containerType) {
       throw new Error('Invalid container type');
     }
-    return new HandshakeAccept(Handshake.decode(source), source.readUint32());
+    return new HandshakeAccept(
+      HandshakeData.decode(source),
+      source.readUint32()
+    );
   }
   encode(target: ResizableByteStream): void {
     target.writeUint8(this.containerType);

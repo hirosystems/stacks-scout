@@ -10,6 +10,7 @@ import { Handshake } from '../message/handshake';
 import { StacksMessageEnvelope } from '../message/stacks-message-envelope';
 import { ResizableByteStream } from '../resizable-byte-stream';
 import { StacksPeerMetrics } from '../server/prometheus-server';
+import { HandshakeData } from '../message/handshake-data';
 
 function createTestHandshakeMessage() {
   const preamble = new Preamble(
@@ -25,18 +26,20 @@ function createTestHandshakeMessage() {
     8
   );
   const neighborAddress = new NeighborAddress(
-    new PeerAddress('0f'.repeat(16)),
+    new PeerAddress('127.0.0.1'),
     4000,
     '0e'.repeat(20)
   );
   const relayVec = new RelayDataVec([]);
   const handshake = new Handshake(
-    new PeerAddress('0d'.repeat(16)),
-    5000,
-    0,
-    '0c'.repeat(33),
-    50n,
-    'http://test.local'
+    new HandshakeData(
+      new PeerAddress('127.0.0.1'),
+      5000,
+      0,
+      '0c'.repeat(33),
+      50n,
+      'http://test.local'
+    )
   );
   const envelope = new StacksMessageEnvelope(preamble, relayVec, handshake);
   const privKey = Buffer.from(
