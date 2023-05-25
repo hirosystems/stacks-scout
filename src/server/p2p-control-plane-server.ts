@@ -2,7 +2,7 @@ import * as net from 'node:net';
 import { StacksPeer, PeerDirection } from '../peer-handler';
 import { logger, ENV } from '../util';
 import { StacksPeerMetrics } from './prometheus-server';
-import { startPeerNeighborScan } from '../neighbor-registry';
+import { PeerConnectionMonitor } from '../peer-connection-monitor';
 
 export async function startControlPlaneServer(metrics: StacksPeerMetrics) {
   const server = net.createServer();
@@ -46,7 +46,7 @@ async function handleNewInboundSocket(
   const socketAddr = `${socket.remoteAddress}:${socket.remotePort}`;
   logger.info(`New control-plane inbound socket connection from ${socketAddr}`);
   const peer = new StacksPeer(socket, PeerDirection.Inbound, metrics);
-  const handshakeReply = await peer.performHandshake();
-  logger.info(`Control-plane handshake reply from inbound peer ${socketAddr}`);
-  await startPeerNeighborScan(peer, metrics);
+  PeerConnectionMonitor.instance.registerConnectedPeer(peer);
+  await peer.performHandshake();
+  logger.info(`Handshake accepted from inbound peer ${socketAddr}`);
 }

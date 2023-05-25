@@ -10,6 +10,7 @@ import {
   StacksPeerMetrics,
   startPrometheusServer,
 } from './server/prometheus-server';
+import { PeerConnectionMonitor } from './peer-connection-monitor';
 
 async function init() {
   setupShutdownHandler();
@@ -17,17 +18,17 @@ async function init() {
   await waitForRpcResponsive();
   await waitForBtcRestResponsive();
 
-  const metrics = new StacksPeerMetrics();
+  const metrics = StacksPeerMetrics.instance;
   await startDataPlaneServer(metrics);
   await startControlPlaneServer(metrics);
   await startPrometheusServer();
 
   await timeout(5000);
   const defaultStacksPeerAddr = getDefaultStacksNodePeerAddress();
-  const stacksPeer = await StacksPeer.connectOutbound(
-    defaultStacksPeerAddr,
-    metrics
-  );
+  const peerConnections = PeerConnectionMonitor.instance;
+  peerConnections.startPeriodicReconnecting();
+  peerConnections.startPeerNeighborScanning();
+  peerConnections.registerPeerEndpoint(defaultStacksPeerAddr);
 }
 
 init().catch((error) => {

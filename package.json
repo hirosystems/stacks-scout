@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@sinclair/typebox": "0.28.10",
+    "better-sqlite3": "8.4.0",
     "env-schema": "5.2.0",
     "fastify": "4.17.0",
     "fastify-metrics": "10.3.0",
@@ -27,6 +28,7 @@
     "undici": "5.22.1"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "7.6.4",
     "@types/jest": "29.5.1",
     "@types/node": "20.2.1",
     "@types/secp256k1": "4.0.3",

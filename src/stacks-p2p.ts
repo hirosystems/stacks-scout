@@ -1,4 +1,4 @@
-import { PeerEndpoint } from './peer-handler';
+import { PeerEndpoint } from './peer-endpoint';
 import { ENV } from './util';
 
 const STABLE_BURN_HEIGHT_LAG = 7;
