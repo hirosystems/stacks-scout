@@ -37,10 +37,25 @@ const schema = Type.Object({
   PROMETHEUS_HOST: Type.String({ default: '0.0.0.0' }),
   PROMETHEUS_PORT: Type.Number({ default: 9153 }),
 
-  DATA_PLANE_PUBLIC_URL: Type.String({
-    default: 'http://127.0.0.1:30443',
+  DATA_PLANE_PUBLIC_HOST: Type.Union(
+    [
+      Type.Literal('auto', {
+        description:
+          'Automatically determine the public IP address of this node',
+      }),
+      Type.String(),
+    ],
+    {
+      default: 'auto',
+      description:
+        'Publicly routable host to the data plane server, should correspond to the DATA_PLANE_HOST config. Use `auto` to automatically determine the public IP address of this node.',
+    }
+  ),
+
+  DATA_PLANE_PUBLIC_PORT: Type.Number({
+    default: 30443,
     description:
-      'Publicly routable URL to the data plane server, should correspond to the DATA_PLANE_HOST:DATA_PLANE_PORT config.',
+      'Publicly routable port to the data plane server, should correspond to the DATA_PLANE_PORT config.',
   }),
 
   CONTROL_PLANE_PUBLIC_HOST: Type.Union(

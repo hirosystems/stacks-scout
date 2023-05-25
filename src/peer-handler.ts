@@ -244,7 +244,7 @@ export class StacksPeer extends EventEmitter {
 
   private setupHandshakeResponder() {
     this.on('handshakeMessageReceived', async (message) => {
-      const handshakeData = this.createHandshakeData();
+      const handshakeData = await this.createHandshakeData();
       const heartbeatIntervalSeconds = 60;
       const handshakeResponse = new HandshakeAccept(
         handshakeData,
@@ -492,9 +492,12 @@ export class StacksPeer extends EventEmitter {
     return envelope;
   }
 
-  private createHandshakeData() {
-    // TODO: make the IP configurable via env var (or self discovery)
-    const myIP = '127.0.0.1';
+  private async createHandshakeData() {
+    const myIP =
+      ENV.DATA_PLANE_PUBLIC_HOST === 'auto'
+        ? await getPublicIP()
+        : ENV.DATA_PLANE_PUBLIC_HOST;
+    const dataUrl = `http://${myIP}:${ENV.DATA_PLANE_PUBLIC_PORT}`;
     // TODO: figure out what the servicesAvailable value should be (looks like the stacks-node uses 0x0003)
     const servicesAvailable = 0x0003;
     return new HandshakeData(
@@ -502,13 +505,13 @@ export class StacksPeer extends EventEmitter {
       /* port */ ENV.CONTROL_PLANE_PORT,
       /* services */ servicesAvailable,
       /* node_public_key */ getPeerKeyPair().pubKey.toString('hex'),
-      /* expire_block_height */ 1_000_000n,
-      /* data_url */ ENV.DATA_PLANE_PUBLIC_URL
+      /* expire_block_height */ 10_000_000n,
+      /* data_url */ dataUrl
     );
   }
 
   async performHandshake(): Promise<StacksMessageEnvelope<HandshakeAccept>> {
-    const handshake = new Handshake(this.createHandshakeData());
+    const handshake = new Handshake(await this.createHandshakeData());
     const envelope = await this.createAndSignEnvelope(handshake);
     this.send(envelope);
     const handshakeReply = await this.waitForMessage(
