@@ -1,6 +1,8 @@
+import * as crypto from 'node:crypto';
 import { pino, LevelWithSilent as PinoLogLevel } from 'pino';
 import { envSchema } from 'env-schema';
 import { Static, Type } from '@sinclair/typebox';
+import * as secp256k1 from 'secp256k1';
 
 export const LogLevel: { [K in PinoLogLevel]: K } = {
   fatal: 'fatal',
@@ -39,6 +41,32 @@ const schema = Type.Object({
     default: 'http://127.0.0.1:30443',
     description:
       'Publicly routable URL to the data plane server, should correspond to the DATA_PLANE_HOST:DATA_PLANE_PORT config.',
+  }),
+
+  CONTROL_PLANE_PUBLIC_HOST: Type.Union(
+    [
+      Type.Literal('auto', {
+        description:
+          'Automatically determine the public IP address of this node',
+      }),
+      Type.String(),
+    ],
+    {
+      default: 'auto',
+      description:
+        'Publicly routable host to the control plane server, should correspond to the CONTROL_PLANE_HOST config. Use `auto` to automatically determine the public IP address of this node.',
+    }
+  ),
+
+  CONTROL_PLANE_PUBLIC_PORT: Type.Number({
+    default: 30444,
+    description:
+      'Publicly routable port to the control plane server, should correspond to the CONTROL_PLANE_PORT config.',
+  }),
+
+  PEER_PRIVATE_KEY: Type.String({
+    default: '8c45db8322f3f8e36389bc4e6091e82060ed2d0db7d8ac6858cc3e90a6639715',
+    description: 'The key this peer uses for message signing.',
   }),
 
   BITCOIND_HOST: Type.String({ default: '127.0.0.1' }),
@@ -136,3 +164,47 @@ export const INT = {
   MIN_I32: -(2 ** 31),
   MIN_I64: -(2n ** 63n),
 } as const;
+
+/** Create RIPEMD160 digest */
+export function hash160(data: Uint8Array): Buffer {
+  // digest algo names reported by openssl: ripemd, rmd160, RIPEMD160
+  const hasher = crypto.createHash('ripemd160');
+  const result = hasher.update(data).digest();
+  return result;
+}
+
+const _lastPublicIP = { ip: Promise.resolve('127.0.0.1'), date: 0 };
+export async function getPublicIP(): Promise<string> {
+  // Cache IP for 10 minutes
+  if (_lastPublicIP.date > Date.now() - 10 * 60 * 1000) {
+    return _lastPublicIP.ip;
+  }
+  // Use last IP if fetching a new one fails
+  const lastIP = _lastPublicIP.ip;
+  const myIPPromise = import('public-ip') // need to dynamic import this ESM module
+    .then((res) => res.publicIpv4())
+    .catch((error) => {
+      logger.error(error, 'Failed to fetch public IP');
+      return lastIP;
+    });
+  _lastPublicIP.ip = myIPPromise;
+  _lastPublicIP.date = Date.now();
+  return await myIPPromise;
+}
+
+let _peerKeyPair:
+  | {
+      privKey: Buffer;
+      pubKey: Buffer;
+      pubKeyHash: Buffer;
+    }
+  | undefined;
+export function getPeerKeyPair() {
+  if (_peerKeyPair === undefined) {
+    const privKey = Buffer.from(ENV.PEER_PRIVATE_KEY, 'hex');
+    const pubKey = Buffer.from(secp256k1.publicKeyCreate(privKey));
+    const pubKeyHash = hash160(pubKey);
+    _peerKeyPair = { privKey, pubKey, pubKeyHash };
+  }
+  return _peerKeyPair;
+}

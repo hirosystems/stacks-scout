@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import * as sqlite3 from 'better-sqlite3';
+import sqlite3 from 'better-sqlite3';
 import { PeerEndpoint } from './peer-endpoint';
 import { ENV } from './util';
 
