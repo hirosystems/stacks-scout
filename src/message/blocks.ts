@@ -4,7 +4,7 @@ import {
   StacksMessageContainerTypeID,
   StacksMessageTypedContainer,
 } from '../stacks-p2p-deser';
-import { StacksBlockVec } from './entities/stacks-block';
+import { StacksBlockVec } from './entities/block';
 
 export class Blocks implements StacksMessageTypedContainer, Encodeable {
   static readonly containerType = StacksMessageContainerTypeID.Blocks;

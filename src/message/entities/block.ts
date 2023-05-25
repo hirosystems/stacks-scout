@@ -1,9 +1,9 @@
 import { ResizableByteStream } from '../../resizable-byte-stream';
 import { Encodeable } from '../../stacks-p2p-deser';
 import { MessageVectorArray } from '../message-vector-array';
-import { StacksTransactionVec } from './stacks-transaction';
+import { TransactionVec } from './transaction';
 
-export class StacksBlock implements Encodeable {
+export class Block implements Encodeable {
   /** (1 byte) */
   readonly version_number: number;
   /** (16 bytes) The cumulative work score for this block's fork */
@@ -23,7 +23,7 @@ export class StacksBlock implements Encodeable {
   readonly state_merkle_root: string;
   /** (20 bytes) */
   readonly microblock_public_key_hash: string;
-  readonly transactions: StacksTransactionVec;
+  readonly transactions: TransactionVec;
 
   constructor(
     version_number: number,
@@ -35,7 +35,7 @@ export class StacksBlock implements Encodeable {
     transaction_merkle_root: string,
     state_merkle_root: string,
     microblock_public_key_hash: string,
-    transactions: StacksTransactionVec
+    transactions: TransactionVec
   ) {
     this.version_number = version_number;
     this.cumulative_work_score = cumulative_work_score;
@@ -49,8 +49,8 @@ export class StacksBlock implements Encodeable {
     this.transactions = transactions;
   }
 
-  static decode(source: ResizableByteStream): StacksBlock {
-    return new StacksBlock(
+  static decode(source: ResizableByteStream): Block {
+    return new Block(
       source.readUint8(),
       source.readBytesAsHexString(16),
       source.readBytesAsHexString(80),
@@ -60,7 +60,7 @@ export class StacksBlock implements Encodeable {
       source.readBytesAsHexString(32),
       source.readBytesAsHexString(32),
       source.readBytesAsHexString(20),
-      StacksTransactionVec.decode(source)
+      TransactionVec.decode(source)
     );
   }
 
@@ -78,11 +78,11 @@ export class StacksBlock implements Encodeable {
   }
 }
 
-export class StacksBlockVec extends MessageVectorArray<StacksBlock> {
-  constructor(items?: StacksBlock[]) {
+export class StacksBlockVec extends MessageVectorArray<Block> {
+  constructor(items?: Block[]) {
     super(items);
   }
   static decode(source: ResizableByteStream): StacksBlockVec {
-    return new this().decode(source, StacksBlock);
+    return new this().decode(source, Block);
   }
 }

@@ -1,8 +1,8 @@
 import { ResizableByteStream } from '../../resizable-byte-stream';
 import { Encodeable } from '../../stacks-p2p-deser';
-import { StacksTransactionSpendingCondition } from './stacks-transaction-spending-condition';
+import { StacksTransactionSpendingCondition } from './transaction-spending-condition';
 
-export abstract class StacksTransactionAuthorization implements Encodeable {
+export abstract class TransactionAuthorization implements Encodeable {
   /** A 1-byte authorization type field that indicates whether or not the transaction has a standard
    * or sponsored authorization */
   readonly authorization_type: number;
@@ -11,7 +11,7 @@ export abstract class StacksTransactionAuthorization implements Encodeable {
     this.authorization_type = authorization_type;
   }
 
-  static decode(source: ResizableByteStream): StacksTransactionAuthorization {
+  static decode(source: ResizableByteStream): TransactionAuthorization {
     const type = source.peekUint8();
     if (type === 0x05) {
       return SponsoredAuthorization.decode(source);
@@ -22,7 +22,7 @@ export abstract class StacksTransactionAuthorization implements Encodeable {
   abstract encode(target: ResizableByteStream): void;
 }
 
-class StandardAuthorization extends StacksTransactionAuthorization {
+class StandardAuthorization extends TransactionAuthorization {
   readonly spending_condition: StacksTransactionSpendingCondition;
 
   constructor(
@@ -33,7 +33,7 @@ class StandardAuthorization extends StacksTransactionAuthorization {
     this.spending_condition = spending_condition;
   }
 
-  static decode(source: ResizableByteStream): StacksTransactionAuthorization {
+  static decode(source: ResizableByteStream): TransactionAuthorization {
     return new StandardAuthorization(
       source.readUint8(),
       StacksTransactionSpendingCondition.decode(source)
@@ -46,7 +46,7 @@ class StandardAuthorization extends StacksTransactionAuthorization {
   }
 }
 
-class SponsoredAuthorization extends StacksTransactionAuthorization {
+class SponsoredAuthorization extends TransactionAuthorization {
   readonly spending_condition_1: StacksTransactionSpendingCondition;
   readonly spending_condition_2: StacksTransactionSpendingCondition;
 
@@ -60,7 +60,7 @@ class SponsoredAuthorization extends StacksTransactionAuthorization {
     this.spending_condition_2 = spending_condition_2;
   }
 
-  static decode(source: ResizableByteStream): StacksTransactionAuthorization {
+  static decode(source: ResizableByteStream): TransactionAuthorization {
     return new SponsoredAuthorization(
       source.readUint8(),
       StacksTransactionSpendingCondition.decode(source),
