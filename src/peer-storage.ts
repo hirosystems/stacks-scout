@@ -55,7 +55,11 @@ export class PeerStorage {
   private static _openInstances = new Map<string, PeerStorage>();
   static open(): PeerStorage {
     const fileName = 'peer-storage.sqlite';
-    const filePath = path.resolve(ENV.DATA_STORAGE_DIR, fileName);
+    const filePath = path.resolve(
+      ENV.DATA_STORAGE_DIR,
+      ENV.STACKS_NETWORK_NAME,
+      fileName
+    );
     let storage = this._openInstances.get(filePath);
     if (storage === undefined) {
       storage = new PeerStorage(filePath);
