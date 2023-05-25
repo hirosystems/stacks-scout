@@ -8,3 +8,5 @@ module.exports = {
 };
 
 process.env.STACKS_NETWORK_NAME = 'regtest';
+process.env.DATA_PLANE_PUBLIC_HOST='127.0.0.1';
+process.env.CONTROL_PLANE_PUBLIC_HOST='127.0.0.1';
