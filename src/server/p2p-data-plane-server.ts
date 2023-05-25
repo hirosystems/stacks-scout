@@ -1,6 +1,5 @@
 import fastify from 'fastify';
 import { ENV, logger } from '../util';
-import { getBtcChainInfo } from '../bitcoin-net';
 import { getStacksNodeInfo } from '../stacks-rpc';
 import { StacksPeerMetrics } from './prometheus-server';
 
@@ -22,10 +21,8 @@ export async function startDataPlaneServer(metrics: StacksPeerMetrics) {
     url: '*',
     method: ['GET', 'POST', 'HEAD', 'PUT'],
     handler: async (request, reply) => {
-      const btcInfo = await getBtcChainInfo();
       const stxInfo = await getStacksNodeInfo();
       return {
-        btcInfo,
         stxInfo,
       };
     },

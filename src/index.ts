@@ -1,10 +1,10 @@
-import { waitForBtcRestResponsive } from './bitcoin-net';
+import { RegtestBitcoinNet } from './bitcoin-net';
 import { startControlPlaneServer } from './server/p2p-control-plane-server';
 import { StacksPeer } from './peer-handler';
 import { setupShutdownHandler } from './shutdown';
 import { getDefaultStacksNodePeerAddress } from './stacks-p2p';
 import { waitForRpcResponsive } from './stacks-rpc';
-import { logger, timeout } from './util';
+import { ENV, logger, timeout } from './util';
 import { startDataPlaneServer } from './server/p2p-data-plane-server';
 import {
   StacksPeerMetrics,
@@ -16,8 +16,10 @@ import { setupPeerInfoLogging } from './peer-logging';
 async function init() {
   setupShutdownHandler();
 
-  await waitForRpcResponsive();
-  await waitForBtcRestResponsive();
+  if (ENV.STACKS_NETWORK_NAME === 'regtest') {
+    await waitForRpcResponsive();
+    await RegtestBitcoinNet.instance.waitForBtcRestResponsive();
+  }
 
   const metrics = StacksPeerMetrics.instance;
   await startDataPlaneServer(metrics);
@@ -29,7 +31,9 @@ async function init() {
 
   peerConnections.startPeriodicReconnecting();
   peerConnections.startPeerNeighborScanning();
-  peerConnections.registerPeerEndpoint(getDefaultStacksNodePeerAddress());
+
+  const defaultPeerEndpoint = await getDefaultStacksNodePeerAddress();
+  peerConnections.registerPeerEndpoint(defaultPeerEndpoint);
   peerConnections.loadPeersFromStorage();
 }
 
