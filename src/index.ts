@@ -31,7 +31,9 @@ async function init() {
 
   peerConnections.startPeriodicReconnecting();
   peerConnections.startPeerNeighborScanning();
-  peerConnections.registerPeerEndpoint(getDefaultStacksNodePeerAddress());
+
+  const defaultPeerEndpoint = await getDefaultStacksNodePeerAddress();
+  peerConnections.registerPeerEndpoint(defaultPeerEndpoint);
   peerConnections.loadPeersFromStorage();
 }
 

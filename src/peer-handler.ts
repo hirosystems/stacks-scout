@@ -51,15 +51,12 @@ const PEER_VERSION_EPOCH_2_3 = 0x08;
 const PEER_VERSION_EPOCH_2_4 = 0x09;
 
 // this should be updated to the latest network epoch version supported by this node
-// const PEER_NETWORK_EPOCH = PEER_VERSION_EPOCH_2_4;
+const PEER_NETWORK_EPOCH = PEER_VERSION_EPOCH_2_4;
 
 // set the fourth byte of the peer version
-const PEER_VERSION_MAINNET =
-  PEER_VERSION_MAINNET_MAJOR | PEER_VERSION_EPOCH_2_3;
-const PEER_VERSION_TESTNET =
-  PEER_VERSION_TESTNET_MAJOR | PEER_VERSION_EPOCH_2_4;
-const PEER_VERSION_REGTEST =
-  PEER_VERSION_TESTNET_MAJOR | PEER_VERSION_EPOCH_2_4;
+const PEER_VERSION_MAINNET = PEER_VERSION_MAINNET_MAJOR | PEER_NETWORK_EPOCH;
+const PEER_VERSION_TESTNET = PEER_VERSION_TESTNET_MAJOR | PEER_NETWORK_EPOCH;
+const PEER_VERSION_REGTEST = PEER_VERSION_TESTNET_MAJOR | PEER_NETWORK_EPOCH;
 
 const NETWORK_ID_MAINNET = 0x00000001;
 const NETWORK_ID_TESTNET = 0x80000000;
@@ -469,7 +466,9 @@ export class StacksPeer extends EventEmitter {
         break;
     }
 
-    const btcInfo = await BitcoinNetInstance.getLatestBlock();
+    const btcInfo = await BitcoinNetInstance.getLatestBlock(
+      stableConfirmations
+    );
 
     const preamble = new Preamble(
       /* peer_version */ peerVersion,

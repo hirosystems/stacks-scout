@@ -197,7 +197,9 @@ export async function getPublicIP(): Promise<string> {
   // Use last IP if fetching a new one fails
   const lastIP = _lastPublicIP.ip;
   const myIPPromise = import('public-ip') // need to dynamic import this ESM module
-    .then((res) => res.publicIpv4())
+    .then((res) => {
+      return res.publicIpv4({ onlyHttps: true });
+    })
     .catch((error) => {
       logger.error(error, 'Failed to fetch public IP');
       return lastIP;

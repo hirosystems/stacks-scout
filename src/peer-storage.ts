@@ -79,15 +79,15 @@ export class PeerStorage {
     return PeerState.fromString(endpoint, row.value);
   }
 
-  *getPeers() {
+  getPeers() {
     const rows = this.db
       .prepare(`SELECT key, value FROM ${this.TABLE.peer_state}`)
-      .iterate() as IterableIterator<{ key: string; value: string }>;
-    for (const row of rows) {
+      .all() as { key: string; value: string }[];
+    return rows.map((row) => {
       const endpoint = PeerEndpoint.fromString(row.key);
       const peer = PeerState.fromString(endpoint, row.value);
-      yield peer;
-    }
+      return peer;
+    });
   }
 
   setPeerState(peer: PeerState) {

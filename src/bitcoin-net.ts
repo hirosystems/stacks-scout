@@ -9,18 +9,17 @@ interface LatestBlockInfo {
 }
 
 interface BitcoinNet {
-  getLatestBlock(): Promise<LatestBlockInfo>;
+  getLatestBlock(stableConfirmations: number): Promise<LatestBlockInfo>;
 }
 
 // See Bitcoin Core REST API reference: https://github.com/bitcoin/bitcoin/blob/master/doc/REST-interface.md
 export class RegtestBitcoinNet implements BitcoinNet {
-  readonly stableConfirmations = 1;
   static readonly instance = new RegtestBitcoinNet();
-  async getLatestBlock(): Promise<LatestBlockInfo> {
+  async getLatestBlock(stableConfirmations: number): Promise<LatestBlockInfo> {
     const btcChainInfo = await this.getBtcChainInfo();
     const height = btcChainInfo.blocks;
     const hash = btcChainInfo.bestblockhash;
-    const stableHeight = height - this.stableConfirmations;
+    const stableHeight = height - stableConfirmations;
     const stableHash = await this.getBtcBlockHashByHeight(stableHeight);
     return {
       hash,
@@ -88,7 +87,6 @@ export class MempoolSpaceBitcoinNet implements BitcoinNet {
   static readonly mainnet = new MempoolSpaceBitcoinNet('mainnet');
   static readonly testnet = new MempoolSpaceBitcoinNet('testnet');
 
-  readonly stableConfirmations = 1;
   readonly networkName: 'mainnet' | 'testnet';
 
   readonly cacheBlockInfoSeconds = 60;
@@ -110,7 +108,7 @@ export class MempoolSpaceBitcoinNet implements BitcoinNet {
     }
   }
 
-  async getLatestBlock(): Promise<LatestBlockInfo> {
+  async getLatestBlock(stableConfirmations: number): Promise<LatestBlockInfo> {
     if (
       this._lastBlockInfo !== undefined &&
       this._lastBlockInfoFetchTime >
@@ -126,7 +124,7 @@ export class MempoolSpaceBitcoinNet implements BitcoinNet {
       });
       const json: MempoolSpaceBlock[] = await req.body.json();
       const latestBlock = json[0];
-      const stableBlock = json[this.stableConfirmations - 1];
+      const stableBlock = json[stableConfirmations];
       return {
         hash: latestBlock.id,
         height: latestBlock.height,
