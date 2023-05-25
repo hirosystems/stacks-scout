@@ -9,7 +9,6 @@ import { StacksMessageEnvelope } from './message/stacks-message-envelope';
 import { ResizableByteStream } from './resizable-byte-stream';
 import { Handshake } from './message/handshake';
 import { Preamble } from './message/preamble';
-import { getBtcBlockHashByHeight, getBtcChainInfo } from './bitcoin-net';
 import { StacksPeerMetrics } from './server/prometheus-server';
 import { HandshakeData } from './message/handshake-data';
 import { GetNeighbors } from './message/get-neighbors';
@@ -32,6 +31,7 @@ import {
   MicroblocksAvailable,
 } from './message/blocks-available';
 import { HandshakeReject } from './message/handshake-reject';
+import { BitcoinNetInstance } from './bitcoin-net';
 
 // From src/core/mod.rs
 
@@ -469,23 +469,16 @@ export class StacksPeer extends EventEmitter {
         break;
     }
 
-    const btcChainInfo = await getBtcChainInfo();
-    const btcStableBurnHeight = btcChainInfo.blocks - stableConfirmations;
-    const latestBtcBlockHash = await getBtcBlockHashByHeight(
-      btcChainInfo.blocks
-    );
-    const stableBtcBlockHash = await getBtcBlockHashByHeight(
-      btcStableBurnHeight
-    );
+    const btcInfo = await BitcoinNetInstance.getLatestBlock();
 
     const preamble = new Preamble(
       /* peer_version */ peerVersion,
       /* network_id */ networkID,
       /* seq */ seqNum,
-      /* burn_block_height */ BigInt(btcChainInfo.blocks),
-      /* burn_header_hash */ new BurnchainHeaderHash(latestBtcBlockHash),
-      /* stable_burn_block_height */ BigInt(btcStableBurnHeight),
-      /* stable_burn_header_hash */ new BurnchainHeaderHash(stableBtcBlockHash),
+      /* burn_block_height */ BigInt(btcInfo.height),
+      /* burn_header_hash */ new BurnchainHeaderHash(btcInfo.hash),
+      /* stable_burn_block_height */ BigInt(btcInfo.stableHeight),
+      /* stable_burn_header_hash */ new BurnchainHeaderHash(btcInfo.stableHash),
       /* additional_data */ 0,
       /* signature */ MessageSignature.empty(),
       /* payload_len */ 0
