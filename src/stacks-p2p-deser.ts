@@ -144,7 +144,7 @@ export const enum StacksMessageContainerTypeID {
 export abstract class StacksMessageTypedContainer implements Encodeable {
   abstract encode(target: ResizableByteStream): void;
   abstract readonly containerType: StacksMessageContainerTypeID;
-  static decode(source: ResizableByteStream): StacksMessageTypedContainer {
+  static decode(source: ResizableByteStream): StacksMessageContainerType {
     const typeID: StacksMessageContainerTypeID = source.peekUint8();
     switch (typeID) {
       case StacksMessageContainerTypeID.Handshake:
@@ -190,3 +190,24 @@ export abstract class StacksMessageTypedContainer implements Encodeable {
     }
   }
 }
+
+export type StacksMessageContainerType =
+  | Handshake
+  | HandshakeAccept
+  | HandshakeReject
+  | GetNeighbors
+  | Neighbors
+  | GetBlocksInv
+  | BlocksInv
+  | GetPoxInv
+  | PoxInv
+  | BlocksAvailable
+  | MicroblocksAvailable
+  | Blocks
+  | Microblocks
+  | Transaction
+  | Nack
+  | Ping
+  | Pong
+  | NatPunchRequest
+  | NatPunchReply;

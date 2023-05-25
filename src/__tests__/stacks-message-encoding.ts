@@ -9,6 +9,7 @@ import { RelayData, RelayDataVec } from '../message/relay-data';
 import { MessageSignature } from '../message/message-signature';
 import { BurnchainHeaderHash } from '../message/burnchain-header-hash';
 import { StacksMessageEnvelope } from '../message/stacks-message-envelope';
+import { HandshakeData } from '../message/handshake-data';
 
 describe('p2p StacksMessage encoding', () => {
   it('should encode and decode a StacksMessageEnvelope', () => {
@@ -25,19 +26,21 @@ describe('p2p StacksMessage encoding', () => {
       8
     );
     const neighborAddress = new NeighborAddress(
-      new PeerAddress('0f'.repeat(16)),
+      new PeerAddress('127.0.0.1'),
       4000,
       '0e'.repeat(20)
     );
     const relayData = new RelayData(neighborAddress, 455);
     const relayVec = new RelayDataVec([relayData]);
     const handshake = new Handshake(
-      new PeerAddress('0d'.repeat(16)),
-      5000,
-      0,
-      '0c'.repeat(33),
-      50n,
-      'http://test.local'
+      new HandshakeData(
+        new PeerAddress('127.0.0.1'),
+        5000,
+        0,
+        '0c'.repeat(33),
+        50n,
+        'http://test.local'
+      )
     );
     const envelope = new StacksMessageEnvelope(preamble, relayVec, handshake);
 
@@ -50,8 +53,8 @@ describe('p2p StacksMessage encoding', () => {
   });
 
   it('should encode and decode handshake accept payload', () => {
-    const handshake = new Handshake(
-      new PeerAddress('0d'.repeat(16)),
+    const handshake = new HandshakeData(
+      new PeerAddress('127.0.0.1'),
       5000,
       0,
       '0c'.repeat(33),

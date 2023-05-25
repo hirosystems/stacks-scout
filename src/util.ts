@@ -22,6 +22,8 @@ const schema = Type.Object({
   NODE_ENV: Type.Enum(NodeEnv),
   LOG_LEVEL: Type.Enum(LogLevel, { default: 'debug' }),
 
+  DATA_STORAGE_DIR: Type.String({ default: './state' }),
+
   /** AKA RPC interface */
   DATA_PLANE_HOST: Type.String({ default: '0.0.0.0' }),
   DATA_PLANE_PORT: Type.Number({ default: 30443 }),

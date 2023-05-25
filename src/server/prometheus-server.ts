@@ -21,7 +21,15 @@ export class StacksPeerMetrics {
   /** Stacks node latency in milliseconds */
   readonly stacks_scout_node_request_duration_milliseconds_bucket: prom.Histogram;
 
-  constructor() {
+  private static _instance: StacksPeerMetrics | undefined;
+  static get instance(): StacksPeerMetrics {
+    if (this._instance === undefined) {
+      this._instance = new StacksPeerMetrics();
+    }
+    return this._instance;
+  }
+
+  private constructor() {
     this.stacks_scout_discovered_nodes = new prom.Gauge({
       name: 'stacks_scout_discovered_nodes',
       help: 'Number of Stacks nodes discovered on the configured network',

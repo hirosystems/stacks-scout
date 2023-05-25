@@ -1,6 +1,6 @@
 import * as net from 'node:net';
-import { EventEmitter } from 'node:events';
-import { ENV, WeakDictionary, logger } from './util';
+import { EventEmitter, captureRejectionSymbol } from 'node:events';
+import { ENV, INT, logger, timeout } from './util';
 import { PeerAddress } from './message/peer-address';
 import { RelayDataVec } from './message/relay-data';
 import { MessageSignature } from './message/message-signature';
@@ -13,7 +13,18 @@ import { randomBytes } from 'node:crypto';
 import * as secp256k1 from 'secp256k1';
 import { getBtcBlockHashByHeight, getBtcChainInfo } from './bitcoin-net';
 import { StacksPeerMetrics } from './server/prometheus-server';
-import { StacksMessageContainerTypeID } from './stacks-p2p-deser';
+import { HandshakeData } from './message/handshake-data';
+import { GetNeighbors } from './message/get-neighbors';
+import {
+  StacksMessageContainerTypeID,
+  StacksMessageTypedContainer,
+  StacksMessageContainerType,
+} from './stacks-p2p-deser';
+import { HandshakeAccept } from './message/handshake-accept';
+import { Neighbors } from './message/neighbors';
+import { Ping } from './message/ping';
+import { Pong } from './message/pong';
+import { PeerEndpoint } from './peer-endpoint';
 
 // From src/core/mod.rs
 
@@ -33,11 +44,15 @@ const PEER_VERSION_EPOCH_2_3 = 0x08;
 const PEER_VERSION_EPOCH_2_4 = 0x09;
 
 // this should be updated to the latest network epoch version supported by this node
-const PEER_NETWORK_EPOCH = PEER_VERSION_EPOCH_2_4;
+// const PEER_NETWORK_EPOCH = PEER_VERSION_EPOCH_2_4;
 
 // set the fourth byte of the peer version
-const PEER_VERSION_MAINNET = PEER_VERSION_MAINNET_MAJOR | PEER_NETWORK_EPOCH;
-const PEER_VERSION_TESTNET = PEER_VERSION_TESTNET_MAJOR | PEER_NETWORK_EPOCH;
+const PEER_VERSION_MAINNET =
+  PEER_VERSION_MAINNET_MAJOR | PEER_VERSION_EPOCH_2_3;
+const PEER_VERSION_TESTNET =
+  PEER_VERSION_TESTNET_MAJOR | PEER_VERSION_EPOCH_2_4;
+const PEER_VERSION_REGTEST =
+  PEER_VERSION_TESTNET_MAJOR | PEER_VERSION_EPOCH_2_4;
 
 const NETWORK_ID_MAINNET = 0x00000001;
 const NETWORK_ID_TESTNET = 0x80000000;
@@ -51,43 +66,26 @@ export enum PeerDirection {
   Outbound,
 }
 
-export const peerConnections = new (class PeerConnections {
-  readonly peers = new Set<StacksPeer>();
-  register(peer: StacksPeer) {
-    this.peers.add(peer);
-    peer.on('closed', () => {
-      this.peers.delete(peer);
-    });
-  }
-  inboundCount() {
-    return this.getInbound().length;
-  }
-  outboundCount() {
-    return this.getOutbound().length;
-  }
-  getInbound(): StacksPeer[] {
-    return [...this.peers].filter(
-      (peer) => peer.direction === PeerDirection.Inbound
-    );
-  }
-  getOutbound(): StacksPeer[] {
-    return [...this.peers].filter(
-      (peer) => peer.direction === PeerDirection.Outbound
-    );
-  }
-})();
-
 interface StacksPeerEvents {
   closed: (error?: Error) => void | Promise<void>;
   socketError: (error: Error) => void | Promise<void>;
   open: () => void | Promise<void>;
   messageReceived: (message: StacksMessageEnvelope) => void | Promise<void>;
+  pingMessageReceived: (
+    message: StacksMessageEnvelope<Ping>
+  ) => void | Promise<void>;
+  handshakeMessageReceived: (
+    message: StacksMessageEnvelope<Handshake>
+  ) => void | Promise<void>;
+  handshakeAcceptMessageReceived: (
+    message: StacksMessageEnvelope<HandshakeAccept>
+  ) => void | Promise<void>;
 }
 
 export class StacksPeer extends EventEmitter {
   readonly socket: net.Socket;
   readonly direction: PeerDirection;
-  readonly address: PeerEndpoint;
+  readonly endpoint: PeerEndpoint;
   /** This peer's private key */
   readonly privKey: Buffer;
   /** This peer's public key */
@@ -96,25 +94,40 @@ export class StacksPeer extends EventEmitter {
   /** epoch in milliseconds, zero for never */
   lastSeen = 0;
 
+  lastMessageSeqNumber = 0;
+
+  handshakeCompleted = false;
+
   constructor(
     socket: net.Socket,
     direction: PeerDirection,
     metrics: StacksPeerMetrics
   ) {
-    super();
+    super({ captureRejections: true });
     this.direction = direction;
-    this.address = new PeerEndpoint(
+    this.endpoint = new PeerEndpoint(
       socket.remoteAddress as string,
       socket.remotePort as number
     );
     this.metrics = metrics;
     do {
+      // TODO: use a persistent key for this (stacks-scout) peer rather than this per-peer key
+      // probably set via env var
       this.privKey = randomBytes(32);
     } while (!secp256k1.privateKeyVerify(this.privKey));
     this.pubKey = Buffer.from(secp256k1.publicKeyCreate(this.privKey));
     this.socket = socket;
-    this.listen();
-    peerConnections.register(this);
+    this.setupSocketEvents();
+    this.setupPongResponder();
+    this.setupHandshakeResponder();
+    this.setupPinging();
+    this.once('handshakeAcceptMessageReceived', () => {
+      this.handshakeCompleted = true;
+    });
+  }
+
+  [captureRejectionSymbol](error: any, event: string, ...args: any[]) {
+    logger.error(error, `Unhandled rejection for event ${event}`);
   }
 
   on<T extends keyof StacksPeerEvents>(
@@ -138,23 +151,88 @@ export class StacksPeer extends EventEmitter {
     return super.emit(eventName, ...args);
   }
 
-  private listen() {
-    this.setupDataReader();
+  private setupSocketEvents() {
+    this.createSocketDataReader();
     this.socket.on('error', (err) => {
       logger.error(err, 'Error on peer socket');
       this.emit('socketError', err);
     });
     this.socket.on('close', (hadError) => {
       if (hadError) {
-        logger.error(`Peer closed connection with error: ${this.address}`);
+        logger.error(`Peer closed connection with error: ${this.endpoint}`);
       } else {
-        logger.info(`Peer closed connection: ${this.address}`);
+        logger.info(`Peer closed connection: ${this.endpoint}`);
       }
       this.emit('closed');
     });
   }
 
-  private setupDataReader() {
+  private async setupPinging() {
+    const socketClosedPromise = new Promise<void>((resolve) => {
+      this.socket.once('close', () => resolve());
+    });
+
+    // wait for the handshake to complete before starting to ping (or for the socket to close)
+    await Promise.race([
+      socketClosedPromise,
+      this.waitForMessage(
+        (msg) =>
+          msg.payload.containerType ===
+          StacksMessageContainerTypeID.HandshakeAccept
+      ),
+    ]);
+    if (this.socket.closed) {
+      return;
+    }
+
+    const pingInterval = 10_000;
+    let nextPingNonce = 0;
+
+    const sendPing = async () => {
+      const pingNonce = ++nextPingNonce;
+      const ping = new Ping(pingNonce);
+      const envelope = await this.createAndSignEnvelope(ping);
+      await this.send(envelope);
+      const pong = await this.waitForMessage(
+        (msg) =>
+          msg.payload.containerType === StacksMessageContainerTypeID.Pong &&
+          msg.payload.nonce === pingNonce
+      );
+      return pong;
+    };
+
+    while (!this.socket.closed) {
+      await timeout(pingInterval);
+      try {
+        await Promise.race([socketClosedPromise, sendPing()]);
+      } catch (error) {
+        logger.error(error, 'Error pinging peer');
+      }
+    }
+  }
+
+  private setupPongResponder() {
+    this.on('pingMessageReceived', async (message) => {
+      const pong = new Pong(message.payload.nonce);
+      const envelope = await this.createAndSignEnvelope(pong);
+      await this.send(envelope);
+    });
+  }
+
+  private setupHandshakeResponder() {
+    this.on('handshakeMessageReceived', async (message) => {
+      const handshakeData = this.createHandshakeData();
+      const heartbeatIntervalSeconds = 60;
+      const handshakeResponse = new HandshakeAccept(
+        handshakeData,
+        heartbeatIntervalSeconds
+      );
+      const envelope = await this.createAndSignEnvelope(handshakeResponse);
+      await this.send(envelope);
+    });
+  }
+
+  private createSocketDataReader() {
     // the left over data from the last received chunk
     let lastChunk = Buffer.alloc(0);
 
@@ -185,6 +263,18 @@ export class StacksPeer extends EventEmitter {
       const receivedMsg = StacksMessageEnvelope.decode(byteStream);
 
       if (buff.length > byteStream.position) {
+        // check if message deserialization read the expected length
+        if (byteStream.position < payloadLength + Preamble.BYTE_SIZE) {
+          logger.error(
+            `Message deserialization error: payload ${
+              receivedMsg.payload.constructor.name
+            } is expected to be ${payloadLength} bytes, but only ${
+              byteStream.position - Preamble.BYTE_SIZE
+            } bytes were read by the decoder`
+          );
+          lastChunk = Buffer.alloc(0);
+          return;
+        }
         // extra data left over after reading the message, save it for next time
         lastChunk = byteStream.readBytesAsBuffer(
           byteStream.byteLength - byteStream.position
@@ -194,15 +284,35 @@ export class StacksPeer extends EventEmitter {
         lastChunk = Buffer.alloc(0);
       }
 
-      logger.debug(receivedMsg, 'got peer message');
+      logger.debug(
+        receivedMsg,
+        `received ${receivedMsg.payload.constructor.name} message from ${this.endpoint}`
+      );
       this.emit('messageReceived', receivedMsg);
 
-      // TODO: Move this to an external obj that listens to `messageReceived`
-      // switch (receivedMsg.payload.containerType) {
-      //   case StacksMessageContainerTypeID.Blocks:
-      //     //
-      //     break;
-      // }
+      switch (receivedMsg.payload.containerType) {
+        case StacksMessageContainerTypeID.Handshake:
+          this.emit(
+            'handshakeMessageReceived',
+            receivedMsg as StacksMessageEnvelope<Handshake>
+          );
+          break;
+        case StacksMessageContainerTypeID.HandshakeAccept:
+          this.emit(
+            'handshakeAcceptMessageReceived',
+            receivedMsg as StacksMessageEnvelope<HandshakeAccept>
+          );
+          break;
+        case StacksMessageContainerTypeID.Ping:
+          this.emit(
+            'pingMessageReceived',
+            receivedMsg as StacksMessageEnvelope<Ping>
+          );
+          break;
+      }
+
+      // EXAMPLE metric manipulation
+      // this.metrics.stacks_scout_discovered_nodes.inc();
 
       if (lastChunk.length > 0) {
         // if there's more data, recursively handle it
@@ -215,7 +325,31 @@ export class StacksPeer extends EventEmitter {
     });
   }
 
-  async initHandshake() {
+  async waitForMessage(predicate: (msg: StacksMessageEnvelope) => boolean) {
+    return new Promise<StacksMessageEnvelope>((resolve) => {
+      const listener = (msg: StacksMessageEnvelope) => {
+        if (predicate(msg)) {
+          this.removeListener('messageReceived', listener);
+          resolve(msg);
+        }
+      };
+      this.on('messageReceived', listener);
+    });
+  }
+
+  private getNextSeqNumber(): number {
+    // increment (wrapping if necessary) the sequence number
+    const seqNum = this.lastMessageSeqNumber++;
+    if (seqNum >= INT.MAX_U32) {
+      this.lastMessageSeqNumber = 0;
+    }
+    return seqNum;
+  }
+
+  async createAndSignEnvelope(
+    message: StacksMessageContainerType
+  ): Promise<StacksMessageEnvelope> {
+    const seqNum = this.getNextSeqNumber();
     let peerVersion: number;
     let networkID: number;
     let stableConfirmations: number;
@@ -232,7 +366,7 @@ export class StacksPeer extends EventEmitter {
         stableConfirmations = STABLE_CONFIRMATIONS_TESTNET;
         break;
       case 'regtest':
-        peerVersion = PEER_VERSION_TESTNET;
+        peerVersion = PEER_VERSION_REGTEST;
         networkID = NETWORK_ID_TESTNET;
         stableConfirmations = STABLE_CONFIRMATIONS_REGTEST;
         break;
@@ -247,19 +381,10 @@ export class StacksPeer extends EventEmitter {
       btcStableBurnHeight
     );
 
-    const handshake = new Handshake(
-      new PeerAddress('00000000000000000000ffff7f000001'), // 127.0.0.1 -> IPv6
-      ENV.CONTROL_PLANE_PORT,
-      0x0001,
-      this.pubKey.toString('hex'),
-      100000n,
-      ENV.DATA_PLANE_PUBLIC_URL
-    );
-
     const preamble = new Preamble(
       /* peer_version */ peerVersion,
       /* network_id */ networkID,
-      /* seq */ 0,
+      /* seq */ seqNum,
       /* burn_block_height */ BigInt(btcChainInfo.blocks),
       /* burn_header_hash */ new BurnchainHeaderHash(latestBtcBlockHash),
       /* stable_burn_block_height */ BigInt(btcStableBurnHeight),
@@ -271,11 +396,62 @@ export class StacksPeer extends EventEmitter {
     const envelope = new StacksMessageEnvelope(
       preamble,
       new RelayDataVec([]), // No relays, we're generating this message.
-      handshake
+      message
     );
     envelope.sign(this.privKey);
+    return envelope;
+  }
 
+  private createHandshakeData() {
+    // TODO: make the IP configurable via env var (or self discovery)
+    const myIP = '127.0.0.1';
+    // TODO: figure out what the servicesAvailable value should be (looks like the stacks-node uses 0x0003)
+    const servicesAvailable = 0x0003;
+    return new HandshakeData(
+      /* addrbytes */ new PeerAddress(myIP),
+      /* port */ ENV.CONTROL_PLANE_PORT,
+      /* services */ servicesAvailable,
+      /* node_public_key */ this.pubKey.toString('hex'),
+      /* expire_block_height */ 1_000_000n,
+      /* data_url */ ENV.DATA_PLANE_PUBLIC_URL
+    );
+  }
+
+  async performHandshake(): Promise<StacksMessageEnvelope<HandshakeAccept>> {
+    const handshake = new Handshake(this.createHandshakeData());
+    const envelope = await this.createAndSignEnvelope(handshake);
     this.send(envelope);
+    const handshakeReply = await this.waitForMessage(
+      (msg) =>
+        msg.payload.containerType ===
+          StacksMessageContainerTypeID.HandshakeAccept ||
+        msg.payload.containerType ===
+          StacksMessageContainerTypeID.HandshakeReject
+    );
+    if (
+      handshakeReply.payload.containerType ===
+      StacksMessageContainerTypeID.HandshakeReject
+    ) {
+      throw new Error('Handshake rejected');
+    } else if (
+      handshakeReply.payload.containerType ===
+      StacksMessageContainerTypeID.HandshakeAccept
+    ) {
+      return handshakeReply as StacksMessageEnvelope<HandshakeAccept>;
+    } else {
+      throw new Error('Invalid handshake reply');
+    }
+  }
+
+  async requestNeighbors(): Promise<StacksMessageEnvelope<Neighbors>> {
+    const getNeighbors = new GetNeighbors();
+    const envelope = await this.createAndSignEnvelope(getNeighbors);
+    this.send(envelope);
+    const neighbors = await this.waitForMessage(
+      (msg) =>
+        msg.payload.containerType === StacksMessageContainerTypeID.Neighbors
+    );
+    return neighbors as StacksMessageEnvelope<Neighbors>;
   }
 
   async send(envelope: StacksMessageEnvelope) {
@@ -315,41 +491,13 @@ export class StacksPeer extends EventEmitter {
       socket.once('connect', onConnect);
       socket.once('error', onError);
     });
+
     const peer = new this(socket, PeerDirection.Outbound, metrics);
-    logger.info(`Connected to Stacks peer: ${peer.address}`);
-    peer.initHandshake().catch((error) => {
-      logger.error(error, 'Error initializing handshake');
-    });
+    logger.info(`Connected to Stacks peer: ${peer.endpoint}`);
+
+    const handshakeReply = await peer.performHandshake();
+    logger.info(`Handshake accepted by peer: ${peer.endpoint}`);
+
     return peer;
-  }
-}
-
-/** A class that stores an IP address (ipv4 or ipv6) and a port number, with helper functions */
-export class PeerEndpoint {
-  static _uniqueCache = new WeakDictionary<string, PeerEndpoint>();
-
-  /** The IP address, either ipv4 or ipv6 */
-  readonly ipAddress: string;
-  /** The port number */
-  readonly port: number;
-
-  constructor(ipAddress: string, port: number) {
-    this.ipAddress = ipAddress;
-    this.port = port;
-    const strRepr = this.toString();
-    const existing = PeerEndpoint._uniqueCache.get(strRepr);
-    if (existing !== undefined) {
-      return existing;
-    }
-    PeerEndpoint._uniqueCache.set(strRepr, this);
-  }
-
-  toString() {
-    return `${this.ipAddress}:${this.port}`;
-  }
-
-  static fromString(str: string) {
-    const [ipAddress, port] = str.split(':');
-    return new PeerEndpoint(ipAddress, parseInt(port));
   }
 }

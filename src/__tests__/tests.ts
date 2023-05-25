@@ -1,4 +1,4 @@
-import { PeerEndpoint } from '../peer-handler';
+import { PeerEndpoint } from '../peer-endpoint';
 import { timeout } from '../util';
 
 it('socket address', () => {
