@@ -34,6 +34,8 @@ import { HandshakeReject } from './message/handshake-reject';
 import { BitcoinNetInstance } from './bitcoin-net';
 import { GetBlocksInv } from './message/get-blocks-inv';
 import { GetPoxInv } from './message/get-pox-inv';
+import { NatPunchRequest } from './message/nat-punch-request';
+import { NatPunchReply } from './message/nat-punch-reply';
 
 // From src/core/mod.rs
 
@@ -119,6 +121,9 @@ interface StacksPeerEvents {
   getPoxInvMessageReceived: (
     message: StacksMessageEnvelope<GetPoxInv>
   ) => void | Promise<void>;
+  natPunchRequestMessageReceived: (
+    message: StacksMessageEnvelope<NatPunchRequest>
+  ) => void | Promise<void>;
 }
 
 export class StacksPeer extends EventEmitter {
@@ -152,6 +157,7 @@ export class StacksPeer extends EventEmitter {
     this.setupNeighborsResponder();
     this.setupGetBlocksInvResponder();
     this.setupGetPoxInvResponder();
+    this.setupNatPunchRequestResponder();
     this.setupNackHandler();
     this.setupPinging();
     this.once('handshakeAcceptMessageReceived', () => {
@@ -300,6 +306,18 @@ export class StacksPeer extends EventEmitter {
         msg,
         `Uh oh! Peer ${this.endpoint} requested pox inv and we don't have an answer`
       );
+    });
+  }
+
+  private setupNatPunchRequestResponder() {
+    this.on('natPunchRequestMessageReceived', async (msg) => {
+      const natPunchReply = new NatPunchReply(
+        new PeerAddress(this.endpoint.ipAddress),
+        this.endpoint.port,
+        msg.payload.nonce
+      );
+      const envelope = await this.createAndSignEnvelope(natPunchReply);
+      await this.send(envelope);
     });
   }
 
