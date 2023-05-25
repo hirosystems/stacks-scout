@@ -147,6 +147,7 @@ export class PeerConnectionMonitor {
           this.connectedPeers.delete(peerEndpoint);
           this.emit('peerDisconnected', peer);
         });
+        this.monitorPeerStats(peer);
         this.emit('peerConnected', peer);
         peer.performHandshake().catch((error) => {
           logger.error(error, `Handshake failed with peer: ${peer.endpoint}`);
@@ -164,13 +165,27 @@ export class PeerConnectionMonitor {
   }
 
   private storePeerState(peerEndpoint: PeerEndpoint) {
-    const storage = PeerStorage.open();
-    let peerState = storage.getPeerState(peerEndpoint);
-    if (peerState === undefined) {
-      peerState = new PeerState(peerEndpoint);
-      peerState.registeredAt = Date.now();
+    this.updatePeerState(peerEndpoint, () => {
+      // leave defaults
+    });
+  }
+
+  private updatePeerState(
+    peerEndpoint: PeerEndpoint,
+    updateFn: (peerState: PeerState) => void
+  ) {
+    try {
+      const storage = PeerStorage.open();
+      let peerState = storage.getPeerState(peerEndpoint);
+      if (peerState === undefined) {
+        peerState = new PeerState(peerEndpoint);
+        peerState.registeredAt = Date.now();
+      }
+      updateFn(peerState);
+      storage.setPeerState(peerState);
+    } catch (error) {
+      logger.error(error, `Error updating peer state for ${peerEndpoint}`);
     }
-    storage.setPeerState(peerState);
   }
 
   public registerPeerEndpoint(peerEndpoint: PeerEndpoint) {
@@ -204,6 +219,32 @@ export class PeerConnectionMonitor {
       this.connectedPeers.delete(peer.endpoint);
       this.emit('peerDisconnected', peer);
     });
+    this.monitorPeerStats(peer);
     this.emit('peerConnected', peer);
+  }
+
+  private monitorPeerStats(peer: StacksPeer) {
+    peer.on('handshakeAcceptMessageReceived', (msg) => {
+      this.updatePeerState(peer.endpoint, (peerState) => {
+        peerState.lastBurnBlockHash = msg.preamble.burn_header_hash.hash;
+        peerState.lastBurnBlockHeight = Number(msg.preamble.burn_block_height);
+        peerState.lastHandshakeAcceptAt = Date.now();
+      });
+    });
+    peer.on('pongMessageReceived', (msg) => {
+      this.updatePeerState(peer.endpoint, (peerState) => {
+        peerState.lastBurnBlockHash = msg.preamble.burn_header_hash.hash;
+        peerState.lastBurnBlockHeight = Number(msg.preamble.burn_block_height);
+        peerState.lastPongReceivedAt = Date.now();
+      });
+    });
+    peer.on('blocksMessageReceived', (msg) => {
+      const blockHash = msg.payload.blocks[0].stacks_block.getBlockHash();
+      this.updatePeerState(peer.endpoint, (peerState) => {
+        peerState.lastBurnBlockHash = msg.preamble.burn_header_hash.hash;
+        peerState.lastBurnBlockHeight = Number(msg.preamble.burn_block_height);
+        peerState.lastBlockHash = blockHash;
+      });
+    });
   }
 }
