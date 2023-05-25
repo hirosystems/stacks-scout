@@ -48,8 +48,10 @@ export function setupPeerInfoLogging(
     peer.on('handshakeAcceptMessageReceived', (message) => {
       if (!peerMap.has(peer.endpoint.ipAddress)) {
         peerMap.add(peer.endpoint.ipAddress);
+        const version = Buffer.alloc(4);
+        version.writeUInt32BE(message.preamble.peer_version);
         metrics.stacks_scout_version.inc({
-          version: message.preamble.peer_version,
+          version: `0x${version.toString('hex')}`,
         });
       }
       logger.debug(

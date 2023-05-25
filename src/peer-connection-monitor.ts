@@ -124,7 +124,7 @@ export class PeerConnectionMonitor {
 
   private async scanPeerNeighbors(peer: StacksPeer) {
     const neighbors = await peer.requestNeighbors();
-    logger.info(
+    logger.debug(
       `Received ${neighbors.payload.neighbors.length} neighbors from peer: ${peer.endpoint}`
     );
     neighbors.payload.neighbors.forEach((neighbor) => {

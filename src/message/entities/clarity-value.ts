@@ -69,12 +69,23 @@ export class ClarityValue implements Encodeable {
   }
 }
 
-export class ClarityTuple extends MessageVectorArray<ClarityTuple> {
-  constructor(items?: ClarityTuple[]) {
-    super(items);
+export class ClarityTuple implements Encodeable {
+  readonly len: number;
+  readonly content: string;
+
+  constructor(len: number, content: string) {
+    this.len = len;
+    this.content = content;
   }
+
   static decode(source: ResizableByteStream): ClarityTuple {
-    return new this().decode(source, ClarityTuple);
+    const len = source.readUint32();
+    const content = source.readBytesAsHexString(len);
+    return new ClarityTuple(len, content);
+  }
+
+  encode(target: ResizableByteStream): void {
+    throw new Error('Method not implemented.');
   }
 }
 
