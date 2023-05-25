@@ -1,6 +1,7 @@
 import { PeerConnectionMonitor } from './peer-connection-monitor';
 import { StacksPeerMetrics } from './server/prometheus-server';
 import { ENV, logger } from './util';
+import { LRUCache } from 'lru-cache';
 
 type PeerIpAddress = string;
 
@@ -21,6 +22,14 @@ export function setupPeerInfoLogging(
   peerConnections: PeerConnectionMonitor,
   metrics: StacksPeerMetrics
 ) {
+  /** Block hash -> timestamp LRU cache for the first time a block was seen. */
+  const blockTimestampCache = new LRUCache<string, number>({
+    max: 20,
+  });
+  /** Transaction hash -> timestamp LRU cache for the first time a block was seen. */
+  const transactionTimestampCache = new LRUCache<string, number>({
+    max: 500,
+  });
   const peerMap = new Map<PeerIpAddress, PeerInfo>();
 
   setInterval(() => {
@@ -95,6 +104,28 @@ export function setupPeerInfoLogging(
       );
     });
 
-    // TODO: a bunch more peer-specific events can be listened and logged here like block messages, etc.
+    peer.on('blocksMessageReceived', (message) => {
+      for (const block of message.payload.blocks) {
+        const hash = block.stacks_block.getBlockHash();
+        const firstSeenAt = blockTimestampCache.get(hash);
+        if (firstSeenAt) {
+          const latency = Date.now() - firstSeenAt;
+          metrics.stacks_scout_block_propagation_rate_bucket.observe(latency);
+        } else {
+          blockTimestampCache.set(hash, Date.now());
+        }
+      }
+    });
+
+    peer.on('transactionMessageReceived', (message) => {
+      // const hash = 'message.payload.transaction.';
+      // const firstSeenAt = transactionTimestampCache.get(hash);
+      // if (firstSeenAt) {
+      //   const latency = Date.now() - firstSeenAt;
+      //   metrics.stacks_scout_mempool_propagation_rate_bucket.observe(latency);
+      // } else {
+      //   blockTimestampCache.set(hash, Date.now());
+      // }
+    });
   });
 }

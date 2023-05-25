@@ -83,7 +83,7 @@ export class StacksBlock implements Encodeable {
     this.transactions.encode(target);
   }
 
-  _blockHash: string | undefined = undefined;
+  private _blockHash: string | undefined = undefined;
   getBlockHash(): string {
     if (this._blockHash === undefined) {
       const byteStream = new ResizableByteStream(
