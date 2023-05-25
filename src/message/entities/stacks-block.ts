@@ -1,8 +1,11 @@
+import { createHash } from 'node:crypto';
 import { ResizableByteStream } from '../../resizable-byte-stream';
 import { Encodeable } from '../../stacks-p2p-deser';
 import { StacksTransactionVec } from './stacks-transaction';
 
 export class StacksBlock implements Encodeable {
+  static readonly STACKS_BLOCK_HEADER_SIZE_BYTES = 247;
+
   /** (1 byte) */
   readonly version_number: number;
   /** (16 bytes) The cumulative work score for this block's fork */
@@ -63,7 +66,7 @@ export class StacksBlock implements Encodeable {
     );
   }
 
-  encode(target: ResizableByteStream): void {
+  encodeHeader(target: ResizableByteStream): void {
     target.writeUint8(this.version_number);
     target.writeBytesFromHexString(this.cumulative_work_score);
     target.writeBytesFromHexString(this.vrf_proof);
@@ -73,6 +76,24 @@ export class StacksBlock implements Encodeable {
     target.writeBytesFromHexString(this.transaction_merkle_root);
     target.writeBytesFromHexString(this.state_merkle_root);
     target.writeBytesFromHexString(this.microblock_public_key_hash);
+  }
+
+  encode(target: ResizableByteStream): void {
+    this.encodeHeader(target);
     this.transactions.encode(target);
+  }
+
+  _blockHash: string | undefined = undefined;
+  getBlockHash(): string {
+    if (this._blockHash === undefined) {
+      const byteStream = new ResizableByteStream(
+        StacksBlock.STACKS_BLOCK_HEADER_SIZE_BYTES
+      );
+      this.encodeHeader(byteStream);
+      const buff = byteStream.asBuffer();
+      const hash = createHash('sha512-256').update(buff).digest();
+      this._blockHash = hash.toString('hex');
+    }
+    return this._blockHash;
   }
 }

@@ -78,6 +78,9 @@ interface StacksPeerEvents {
   pingMessageReceived: (
     message: StacksMessageEnvelope<Ping>
   ) => void | Promise<void>;
+  pongMessageReceived: (
+    message: StacksMessageEnvelope<Pong>
+  ) => void | Promise<void>;
   handshakeMessageReceived: (
     message: StacksMessageEnvelope<Handshake>
   ) => void | Promise<void>;
@@ -365,6 +368,12 @@ export class StacksPeer extends EventEmitter {
           this.emit(
             'pingMessageReceived',
             receivedMsg as StacksMessageEnvelope<Ping>
+          );
+          break;
+        case StacksMessageContainerTypeID.Pong:
+          this.emit(
+            'pongMessageReceived',
+            receivedMsg as StacksMessageEnvelope<Pong>
           );
           break;
         case StacksMessageContainerTypeID.Nack:
