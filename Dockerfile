@@ -1,0 +1,47 @@
+FROM node:20-bullseye
+
+WORKDIR /app
+
+#RUN apt-get update
+#RUN apt-get -y install node-gyp build-essential
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+RUN npm prune --production
+
+ENV NODE_ENV=production
+ENV LOG_LEVEL=debug
+
+ENV STACKS_NETWORK_NAME=mainnet
+
+ENV PEER_PRIVATE_KEY=8c45db8322f3f8e36389bc4e6091e82060ed2d0db7d8ac6858cc3e90a6639715
+
+ENV DATA_PLANE_PUBLIC_HOST=auto
+ENV CONTROL_PLANE_PUBLIC_HOST=auto
+
+ENV DATA_PLANE_HOST=0.0.0.0
+ENV DATA_PLANE_PORT=30443
+
+ENV CONTROL_PLANE_HOST=0.0.0.0
+ENV CONTROL_PLANE_PORT=30444
+
+ENV PROMETHEUS_HOST=0.0.0.0
+ENV PROMETHEUS_PORT=9153
+
+ENV STACKS_NODE_RPC_HOST=seed.mainnet.hiro.so
+ENV STACKS_NODE_RPC_PORT=20443
+
+ENV STACKS_NODE_P2P_HOST=seed.mainnet.hiro.so
+ENV STACKS_NODE_P2P_PORT=20444
+
+ENV DATA_STORAGE_DIR=/state
+# VOLUME /state
+
+# EXPOSE $DATA_PLANE_PORT
+# EXPOSE $CONTROL_PLANE_PORT
+# EXPOSE $PROMETHEUS_PORT
+
+CMD ["node", "/app/build/index.js"]
