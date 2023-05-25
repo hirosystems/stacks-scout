@@ -2,7 +2,7 @@ import { logger } from './util';
 import { StacksPeerMetrics } from './server/prometheus-server';
 import { StacksPeer } from './peer-handler';
 import { PeerEndpoint } from './peer-endpoint';
-import { PeerStorage } from './peer-storage';
+import { PeerState, PeerStorage } from './peer-storage';
 
 export class PeerConnectionMonitor {
   readonly knownPeers = new Set<PeerEndpoint>();
@@ -25,9 +25,15 @@ export class PeerConnectionMonitor {
     return this._instance;
   }
 
-  // make constructor private to force usage of instance getter
   private constructor() {
-    // TODO: load known peers from data storage
+    // make constructor private to force usage of instance getter
+  }
+
+  public loadPeersFromStorage() {
+    const storage = PeerStorage.open();
+    for (const peer of storage.getPeers()) {
+      this.registerPeerEndpoint(peer.endpoint);
+    }
   }
 
   getUnconnectedPeers(): PeerEndpoint[] {
@@ -120,6 +126,16 @@ export class PeerConnectionMonitor {
     this.connectionsInProgress.set(peerEndpoint, connectionPromise);
   }
 
+  private storePeerState(peerEndpoint: PeerEndpoint) {
+    const storage = PeerStorage.open();
+    let peerState = storage.getPeerState(peerEndpoint);
+    if (peerState === undefined) {
+      peerState = new PeerState(peerEndpoint);
+      peerState.registeredAt = Date.now();
+    }
+    storage.setPeerState(peerState);
+  }
+
   public registerPeerEndpoint(peerEndpoint: PeerEndpoint) {
     this.knownPeers.add(peerEndpoint);
     if (this.connectedPeers.has(peerEndpoint)) {
@@ -130,12 +146,17 @@ export class PeerConnectionMonitor {
       // Already attempting to connect to this peer
       return;
     }
+    this.storePeerState(peerEndpoint);
     this.connectToPeer(peerEndpoint);
   }
 
   public registerConnectedPeer(peer: StacksPeer) {
+    if (this.connectedPeers.has(peer.endpoint)) {
+      throw new Error(`Already connected to peer: ${peer.endpoint}`);
+    }
     this.knownPeers.add(peer.endpoint);
     this.connectedPeers.set(peer.endpoint, peer);
+    this.storePeerState(peer.endpoint);
     peer.on('closed', () => {
       this.connectedPeers.delete(peer.endpoint);
     });

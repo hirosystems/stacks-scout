@@ -1,5 +1,6 @@
 import * as path from 'node:path';
-import sqlite3 from 'better-sqlite3';
+import * as fs from 'node:fs';
+import * as sqlite3 from 'better-sqlite3';
 import { PeerEndpoint } from './peer-endpoint';
 import { ENV } from './util';
 
@@ -10,6 +11,7 @@ export class PeerState {
   lastPingSentAt = 0;
   lastBurnBlockHeight = 0;
   lastBurnBlockHash = '';
+  registeredAt = 0;
 
   constructor(endpoint: PeerEndpoint) {
     this.endpoint = endpoint;
@@ -36,7 +38,11 @@ export class PeerStorage {
   private readonly db: sqlite3.Database;
 
   private constructor(filePath: string) {
-    this.db = new sqlite3(filePath);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    this.db = sqlite3(filePath);
     this.db.pragma('journal_mode = WAL');
     this.db.exec(
       `CREATE TABLE IF NOT EXISTS ${this.TABLE.peer_state} (key TEXT PRIMARY KEY, value TEXT)`
@@ -46,10 +52,10 @@ export class PeerStorage {
     );
   }
 
-  static _openInstances = new Map<string, PeerStorage>();
+  private static _openInstances = new Map<string, PeerStorage>();
   static open(): PeerStorage {
     const fileName = 'peer-storage.sqlite';
-    const filePath = path.join(ENV.DATA_STORAGE_DIR, fileName);
+    const filePath = path.resolve(ENV.DATA_STORAGE_DIR, fileName);
     let storage = this._openInstances.get(filePath);
     if (storage === undefined) {
       storage = new PeerStorage(filePath);
@@ -67,6 +73,17 @@ export class PeerStorage {
       return undefined;
     }
     return PeerState.fromString(endpoint, row);
+  }
+
+  *getPeers() {
+    const rows = this.db
+      .prepare(`SELECT key, value FROM ${this.TABLE.peer_state}`)
+      .iterate() as IterableIterator<{ key: string; value: string }>;
+    for (const row of rows) {
+      const endpoint = PeerEndpoint.fromString(row.key);
+      const peer = PeerState.fromString(endpoint, row.value);
+      yield peer;
+    }
   }
 
   setPeerState(peer: PeerState) {

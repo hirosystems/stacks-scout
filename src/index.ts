@@ -29,6 +29,7 @@ async function init() {
   peerConnections.startPeriodicReconnecting();
   peerConnections.startPeerNeighborScanning();
   peerConnections.registerPeerEndpoint(defaultStacksPeerAddr);
+  peerConnections.loadPeersFromStorage();
 }
 
 init().catch((error) => {
