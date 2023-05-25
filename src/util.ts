@@ -68,6 +68,9 @@ const schema = Type.Object({
     default: '8c45db8322f3f8e36389bc4e6091e82060ed2d0db7d8ac6858cc3e90a6639715',
     description: 'The key this peer uses for message signing.',
   }),
+  PEER_NEIGHBOR_SCAN_INTERVAL_MS: Type.Number({ default: 1000 * 30 }),
+  PEER_RECONNECT_INTERVAL_MS: Type.Number({ default: 1000 * 60 * 1 }),
+  PEER_REPORT_INTERVAL_MS: Type.Number({ default: 1000 * 30 }),
 
   BITCOIND_HOST: Type.String({ default: '127.0.0.1' }),
   BITCOIND_PORT: Type.Number({ default: 18443 }),

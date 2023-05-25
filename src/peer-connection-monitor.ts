@@ -1,5 +1,5 @@
 import { EventEmitter, captureRejectionSymbol } from 'node:events';
-import { logger } from './util';
+import { ENV, logger } from './util';
 import { StacksPeerMetrics } from './server/prometheus-server';
 import { StacksPeer } from './peer-handler';
 import { PeerEndpoint } from './peer-endpoint';
@@ -16,12 +16,7 @@ export class PeerConnectionMonitor {
   readonly connectedPeers = new Map<PeerEndpoint, StacksPeer>();
   readonly connectionsInProgress = new Map<PeerEndpoint, Promise<StacksPeer>>();
 
-  // TODO: make reconnectInterval configurable
-  private readonly reconnectInterval = 1000 * 60 * 1; // 1 minute;
   private reconnectTimer: NodeJS.Timer | undefined;
-
-  // TODO: make neighborScanInterval configurable
-  private readonly neighborScanInterval = 1000 * 30; // 30 seconds
   private neighborScanTimer: NodeJS.Timer | undefined;
 
   private readonly eventEmitter = new EventEmitter({ captureRejections: true });
@@ -99,7 +94,7 @@ export class PeerConnectionMonitor {
       peers.forEach((peer) => {
         this.connectToPeer(peer);
       });
-    });
+    }, ENV.PEER_RECONNECT_INTERVAL_MS);
   }
 
   /**
@@ -124,7 +119,7 @@ export class PeerConnectionMonitor {
           );
         });
       });
-    }, this.neighborScanInterval);
+    }, ENV.PEER_NEIGHBOR_SCAN_INTERVAL_MS);
   }
 
   private async scanPeerNeighbors(peer: StacksPeer) {
