@@ -27,7 +27,7 @@ async function init() {
   await startPrometheusServer();
 
   const peerConnections = PeerConnectionMonitor.instance;
-  setupPeerInfoLogging(peerConnections);
+  setupPeerInfoLogging(peerConnections, metrics);
 
   peerConnections.startPeriodicReconnecting();
   peerConnections.startPeerNeighborScanning();
