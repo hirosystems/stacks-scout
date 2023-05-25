@@ -1,6 +1,6 @@
 import * as net from 'node:net';
 import { EventEmitter, captureRejectionSymbol } from 'node:events';
-import { ENV, INT, WeakDictionary, logger, timeout } from './util';
+import { ENV, INT, logger, timeout } from './util';
 import { PeerAddress } from './message/peer-address';
 import { RelayDataVec } from './message/relay-data';
 import { MessageSignature } from './message/message-signature';
@@ -24,6 +24,7 @@ import { HandshakeAccept } from './message/handshake-accept';
 import { Neighbors } from './message/neighbors';
 import { Ping } from './message/ping';
 import { Pong } from './message/pong';
+import { PeerEndpoint } from './peer-endpoint';
 
 // From src/core/mod.rs
 
@@ -65,32 +66,6 @@ export enum PeerDirection {
   Outbound,
 }
 
-export const peerConnections = new (class PeerConnections {
-  readonly peers = new Set<StacksPeer>();
-  register(peer: StacksPeer) {
-    this.peers.add(peer);
-    peer.on('closed', () => {
-      this.peers.delete(peer);
-    });
-  }
-  inboundCount() {
-    return this.getInbound().length;
-  }
-  outboundCount() {
-    return this.getOutbound().length;
-  }
-  getInbound(): StacksPeer[] {
-    return [...this.peers].filter(
-      (peer) => peer.direction === PeerDirection.Inbound
-    );
-  }
-  getOutbound(): StacksPeer[] {
-    return [...this.peers].filter(
-      (peer) => peer.direction === PeerDirection.Outbound
-    );
-  }
-})();
-
 interface StacksPeerEvents {
   closed: (error?: Error) => void | Promise<void>;
   socketError: (error: Error) => void | Promise<void>;
@@ -102,12 +77,15 @@ interface StacksPeerEvents {
   handshakeMessageReceived: (
     message: StacksMessageEnvelope<Handshake>
   ) => void | Promise<void>;
+  handshakeAcceptMessageReceived: (
+    message: StacksMessageEnvelope<HandshakeAccept>
+  ) => void | Promise<void>;
 }
 
 export class StacksPeer extends EventEmitter {
   readonly socket: net.Socket;
   readonly direction: PeerDirection;
-  readonly address: PeerEndpoint;
+  readonly endpoint: PeerEndpoint;
   /** This peer's private key */
   readonly privKey: Buffer;
   /** This peer's public key */
@@ -118,6 +96,8 @@ export class StacksPeer extends EventEmitter {
 
   lastMessageSeqNumber = 0;
 
+  handshakeCompleted = false;
+
   constructor(
     socket: net.Socket,
     direction: PeerDirection,
@@ -125,7 +105,7 @@ export class StacksPeer extends EventEmitter {
   ) {
     super({ captureRejections: true });
     this.direction = direction;
-    this.address = new PeerEndpoint(
+    this.endpoint = new PeerEndpoint(
       socket.remoteAddress as string,
       socket.remotePort as number
     );
@@ -141,7 +121,9 @@ export class StacksPeer extends EventEmitter {
     this.setupPongResponder();
     this.setupHandshakeResponder();
     this.setupPinging();
-    peerConnections.register(this);
+    this.once('handshakeAcceptMessageReceived', () => {
+      this.handshakeCompleted = true;
+    });
   }
 
   [captureRejectionSymbol](error: any, event: string, ...args: any[]) {
@@ -177,9 +159,9 @@ export class StacksPeer extends EventEmitter {
     });
     this.socket.on('close', (hadError) => {
       if (hadError) {
-        logger.error(`Peer closed connection with error: ${this.address}`);
+        logger.error(`Peer closed connection with error: ${this.endpoint}`);
       } else {
-        logger.info(`Peer closed connection: ${this.address}`);
+        logger.info(`Peer closed connection: ${this.endpoint}`);
       }
       this.emit('closed');
     });
@@ -281,6 +263,18 @@ export class StacksPeer extends EventEmitter {
       const receivedMsg = StacksMessageEnvelope.decode(byteStream);
 
       if (buff.length > byteStream.position) {
+        // check if message deserialization read the expected length
+        if (byteStream.position < payloadLength + Preamble.BYTE_SIZE) {
+          logger.error(
+            `Message deserialization error: payload ${
+              receivedMsg.payload.constructor.name
+            } is expected to be ${payloadLength} bytes, but only ${
+              byteStream.position - Preamble.BYTE_SIZE
+            } bytes were read by the decoder`
+          );
+          lastChunk = Buffer.alloc(0);
+          return;
+        }
         // extra data left over after reading the message, save it for next time
         lastChunk = byteStream.readBytesAsBuffer(
           byteStream.byteLength - byteStream.position
@@ -292,7 +286,7 @@ export class StacksPeer extends EventEmitter {
 
       logger.debug(
         receivedMsg,
-        `received ${receivedMsg.payload.constructor.name} message from ${this.address}`
+        `received ${receivedMsg.payload.constructor.name} message from ${this.endpoint}`
       );
       this.emit('messageReceived', receivedMsg);
 
@@ -301,6 +295,12 @@ export class StacksPeer extends EventEmitter {
           this.emit(
             'handshakeMessageReceived',
             receivedMsg as StacksMessageEnvelope<Handshake>
+          );
+          break;
+        case StacksMessageContainerTypeID.HandshakeAccept:
+          this.emit(
+            'handshakeAcceptMessageReceived',
+            receivedMsg as StacksMessageEnvelope<HandshakeAccept>
           );
           break;
         case StacksMessageContainerTypeID.Ping:
@@ -493,57 +493,11 @@ export class StacksPeer extends EventEmitter {
     });
 
     const peer = new this(socket, PeerDirection.Outbound, metrics);
-    logger.info(`Connected to Stacks peer: ${peer.address}`);
+    logger.info(`Connected to Stacks peer: ${peer.endpoint}`);
 
     const handshakeReply = await peer.performHandshake();
-    logger.info(`Handshake accepted by peer: ${peer.address}`);
+    logger.info(`Handshake accepted by peer: ${peer.endpoint}`);
 
-    // TODO: store neighbor addresses in memory registery object, and monitor/retry connection to them
-    const neighbors = await peer.requestNeighbors();
-    logger.info(
-      `Received ${neighbors.payload.neighbors.length} neighbors from peer: ${peer.address}`
-    );
-    neighbors.payload.neighbors.forEach((neighbor) => {
-      setImmediate(() => {
-        const peerEndpoint = new PeerEndpoint(
-          neighbor.addrbytes.ip_address,
-          neighbor.port
-        );
-        StacksPeer.connectOutbound(peerEndpoint, metrics).catch((error) => {
-          logger.error(error, `Error connecting to peer: ${peerEndpoint}`);
-        });
-      });
-    });
     return peer;
-  }
-}
-
-/** A class that stores an IP address (ipv4 or ipv6) and a port number, with helper functions */
-export class PeerEndpoint {
-  static _uniqueCache = new WeakDictionary<string, PeerEndpoint>();
-
-  /** The IP address, either ipv4 or ipv6 */
-  readonly ipAddress: string;
-  /** The port number */
-  readonly port: number;
-
-  constructor(ipAddress: string, port: number) {
-    this.ipAddress = ipAddress;
-    this.port = port;
-    const strRepr = this.toString();
-    const existing = PeerEndpoint._uniqueCache.get(strRepr);
-    if (existing !== undefined) {
-      return existing;
-    }
-    PeerEndpoint._uniqueCache.set(strRepr, this);
-  }
-
-  toString() {
-    return `${this.ipAddress}:${this.port}`;
-  }
-
-  static fromString(str: string) {
-    const [ipAddress, port] = str.split(':');
-    return new PeerEndpoint(ipAddress, parseInt(port));
   }
 }

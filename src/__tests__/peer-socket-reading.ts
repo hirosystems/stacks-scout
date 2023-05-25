@@ -88,17 +88,12 @@ async function writeSocketFlushed(socket: net.Socket, data: Buffer) {
 }
 
 describe('peer socket reading', () => {
-  let stacksPeerMetrics: StacksPeerMetrics;
-  beforeAll(() => {
-    stacksPeerMetrics = new StacksPeerMetrics();
-  });
-
   it('should read exactly one message sent at a time', async () => {
     const { server, readerSocket, writerSocket } = await createTestSocket();
     const peer = new StacksPeer(
       readerSocket,
       PeerDirection.Inbound,
-      stacksPeerMetrics
+      StacksPeerMetrics.instance
     );
 
     const msg = createTestHandshakeMessage();
@@ -130,7 +125,7 @@ describe('peer socket reading', () => {
     const peer = new StacksPeer(
       readerSocket,
       PeerDirection.Inbound,
-      stacksPeerMetrics
+      StacksPeerMetrics.instance
     );
 
     const msg = createTestHandshakeMessage();
@@ -175,7 +170,7 @@ describe('peer socket reading', () => {
     const peer = new StacksPeer(
       readerSocket,
       PeerDirection.Inbound,
-      stacksPeerMetrics
+      StacksPeerMetrics.instance
     );
 
     const msg = createTestHandshakeMessage();
