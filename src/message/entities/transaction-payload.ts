@@ -1,6 +1,6 @@
 import { ResizableByteStream } from '../../resizable-byte-stream';
 import { Encodeable } from '../../stacks-p2p-deser';
-import { ClarityValueVec } from './clarity-value';
+import { ClarityValue, ClarityValueVec } from './clarity-value';
 import { MicroblockHeader } from './microblock-header';
 import {
   ContractName,
@@ -152,5 +152,53 @@ export class CoinbasePayload extends TransactionPayload {
 
   static decode(source: ResizableByteStream): CoinbasePayload {
     return new CoinbasePayload(source.readBytesAsHexString(32));
+  }
+}
+
+export class CoinbasePayToAltPayload extends TransactionPayload {
+  /** A 32-byte field called a coinbase buffer that the Stacks leader can fill with whatever it
+   * wants. */
+  readonly buffer: string;
+  readonly principal: ClarityValue;
+
+  constructor(buffer: string, principal: ClarityValue) {
+    super();
+    this.buffer = buffer;
+    this.principal = principal;
+  }
+
+  static decode(source: ResizableByteStream): CoinbasePayToAltPayload {
+    return new CoinbasePayToAltPayload(
+      source.readBytesAsHexString(32),
+      ClarityValue.decode(source)
+    );
+  }
+}
+
+export class VersionedSmartContractPayload extends SmartContractPayload {
+  /** 1 byte */
+  readonly clarity_version: number;
+
+  constructor(
+    clarity_version: number,
+    name: ContractName,
+    body_length: number,
+    body: string
+  ) {
+    super(name, body_length, body);
+    this.clarity_version = clarity_version;
+  }
+
+  static decode(source: ResizableByteStream): VersionedSmartContractPayload {
+    const clarity_version = source.readUint8();
+    const name = ContractName.decode(source);
+    const body_length = source.readUint32();
+    const body = source.readBytesAsHexString(body_length);
+    return new VersionedSmartContractPayload(
+      clarity_version,
+      name,
+      body_length,
+      body
+    );
   }
 }

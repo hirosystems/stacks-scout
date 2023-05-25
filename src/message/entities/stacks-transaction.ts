@@ -7,12 +7,14 @@ import {
   TransactionAuthorization,
 } from './transaction-authorization';
 import {
+  CoinbasePayToAltPayload,
   CoinbasePayload,
   ContractCallPayload,
   PoisonMicroblockPayload,
   SmartContractPayload,
   TokenTransferPayload,
   TransactionPayload,
+  VersionedSmartContractPayload,
 } from './transaction-payload';
 import { StacksTransactionPostConditionVec } from './transaction-post-condition';
 
@@ -82,8 +84,14 @@ export class StacksTransaction implements Encodeable {
       case 0x03:
         payload = PoisonMicroblockPayload.decode(source);
         break;
-      default:
+      case 0x04:
         payload = CoinbasePayload.decode(source);
+        break;
+      case 0x05:
+        payload = CoinbasePayToAltPayload.decode(source);
+        break;
+      default:
+        payload = VersionedSmartContractPayload.decode(source);
         break;
     }
     return new StacksTransaction(
