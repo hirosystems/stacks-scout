@@ -24,6 +24,7 @@ import { HandshakeAccept } from './message/handshake-accept';
 import { Neighbors } from './message/neighbors';
 import { Ping } from './message/ping';
 import { Pong } from './message/pong';
+import { startPeerNeighborScan } from './neighbor-registry';
 
 // From src/core/mod.rs
 
@@ -88,6 +89,9 @@ export const peerConnections = new (class PeerConnections {
     return [...this.peers].filter(
       (peer) => peer.direction === PeerDirection.Outbound
     );
+  }
+  hasPeer(addr: PeerEndpoint): boolean {
+    return [...this.peers].some((peer) => peer.address === addr);
   }
 })();
 
@@ -498,22 +502,10 @@ export class StacksPeer extends EventEmitter {
     const handshakeReply = await peer.performHandshake();
     logger.info(`Handshake accepted by peer: ${peer.address}`);
 
-    // TODO: store neighbor addresses in memory registery object, and monitor/retry connection to them
-    const neighbors = await peer.requestNeighbors();
-    logger.info(
-      `Received ${neighbors.payload.neighbors.length} neighbors from peer: ${peer.address}`
-    );
-    neighbors.payload.neighbors.forEach((neighbor) => {
-      setImmediate(() => {
-        const peerEndpoint = new PeerEndpoint(
-          neighbor.addrbytes.ip_address,
-          neighbor.port
-        );
-        StacksPeer.connectOutbound(peerEndpoint, metrics).catch((error) => {
-          logger.error(error, `Error connecting to peer: ${peerEndpoint}`);
-        });
-      });
+    startPeerNeighborScan(peer, metrics).catch((error) => {
+      logger.error(error, `Error scanning neighbors for peer: ${peer.address}`);
     });
+
     return peer;
   }
 }
