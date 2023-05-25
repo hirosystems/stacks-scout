@@ -68,11 +68,11 @@ export class PeerStorage {
     // read from peer_state, return undefined if not found
     const row = this.db
       .prepare(`SELECT value FROM ${this.TABLE.peer_state} WHERE key = ?`)
-      .get(endpoint.toString()) as string | undefined;
+      .get(endpoint.toString()) as { value: string } | undefined;
     if (row === undefined) {
       return undefined;
     }
-    return PeerState.fromString(endpoint, row);
+    return PeerState.fromString(endpoint, row.value);
   }
 
   *getPeers() {

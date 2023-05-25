@@ -263,6 +263,18 @@ export class StacksPeer extends EventEmitter {
       const receivedMsg = StacksMessageEnvelope.decode(byteStream);
 
       if (buff.length > byteStream.position) {
+        // check if message deserialization read the expected length
+        if (byteStream.position < payloadLength + Preamble.BYTE_SIZE) {
+          logger.error(
+            `Message deserialization error: payload ${
+              receivedMsg.payload.constructor.name
+            } is expected to be ${payloadLength} bytes, but only ${
+              byteStream.position - Preamble.BYTE_SIZE
+            } bytes were read by the decoder`
+          );
+          lastChunk = Buffer.alloc(0);
+          return;
+        }
         // extra data left over after reading the message, save it for next time
         lastChunk = byteStream.readBytesAsBuffer(
           byteStream.byteLength - byteStream.position
