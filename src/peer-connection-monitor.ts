@@ -1,8 +1,15 @@
+import { EventEmitter, captureRejectionSymbol } from 'node:events';
 import { logger } from './util';
 import { StacksPeerMetrics } from './server/prometheus-server';
 import { StacksPeer } from './peer-handler';
 import { PeerEndpoint } from './peer-endpoint';
 import { PeerState, PeerStorage } from './peer-storage';
+
+interface PeerConnectionMonitorEvents {
+  peerEndpointDiscovered(peerEndpoint: PeerEndpoint): void | Promise<void>;
+  peerConnected(peer: StacksPeer): void | Promise<void>;
+  peerDisconnected(peer: StacksPeer): void | Promise<void>;
+}
 
 export class PeerConnectionMonitor {
   readonly knownPeers = new Set<PeerEndpoint>();
@@ -10,12 +17,14 @@ export class PeerConnectionMonitor {
   readonly connectionsInProgress = new Map<PeerEndpoint, Promise<StacksPeer>>();
 
   // TODO: make reconnectInterval configurable
-  readonly reconnectInterval = 1000 * 60 * 1; // 1 minute;
-  reconnectTimer: NodeJS.Timer | undefined;
+  private readonly reconnectInterval = 1000 * 60 * 1; // 1 minute;
+  private reconnectTimer: NodeJS.Timer | undefined;
 
   // TODO: make neighborScanInterval configurable
-  readonly neighborScanInterval = 1000 * 30; // 30 seconds
-  neighborScanTimer: NodeJS.Timer | undefined;
+  private readonly neighborScanInterval = 1000 * 30; // 30 seconds
+  private neighborScanTimer: NodeJS.Timer | undefined;
+
+  private readonly eventEmitter = new EventEmitter({ captureRejections: true });
 
   private static _instance: PeerConnectionMonitor | undefined;
   static get instance(): PeerConnectionMonitor {
@@ -26,7 +35,35 @@ export class PeerConnectionMonitor {
   }
 
   private constructor() {
-    // make constructor private to force usage of instance getter
+    Object.assign(this.eventEmitter, {
+      [captureRejectionSymbol]: (error: any, event: string, ...args: any[]) => {
+        logger.error(
+          error,
+          `Unhandled rejection for peer-connection-monitor event ${event}`
+        );
+      },
+    });
+  }
+
+  on<T extends keyof PeerConnectionMonitorEvents>(
+    eventName: T,
+    listener: PeerConnectionMonitorEvents[T]
+  ) {
+    this.eventEmitter.on(eventName, listener);
+  }
+
+  once<T extends keyof PeerConnectionMonitorEvents>(
+    eventName: T,
+    listener: PeerConnectionMonitorEvents[T]
+  ) {
+    this.eventEmitter.once(eventName, listener);
+  }
+
+  emit<T extends keyof PeerConnectionMonitorEvents>(
+    eventName: T,
+    ...args: Parameters<PeerConnectionMonitorEvents[T]>
+  ) {
+    this.eventEmitter.emit(eventName, ...args);
   }
 
   public loadPeersFromStorage() {
@@ -113,6 +150,11 @@ export class PeerConnectionMonitor {
         this.connectedPeers.set(peerEndpoint, peer);
         peer.on('closed', () => {
           this.connectedPeers.delete(peerEndpoint);
+          this.emit('peerDisconnected', peer);
+        });
+        this.emit('peerConnected', peer);
+        peer.performHandshake().catch((error) => {
+          logger.error(error, `Handshake failed with peer: ${peer.endpoint}`);
         });
         return peer;
       })
@@ -137,7 +179,10 @@ export class PeerConnectionMonitor {
   }
 
   public registerPeerEndpoint(peerEndpoint: PeerEndpoint) {
-    this.knownPeers.add(peerEndpoint);
+    if (!this.knownPeers.has(peerEndpoint)) {
+      this.knownPeers.add(peerEndpoint);
+      this.emit('peerEndpointDiscovered', peerEndpoint);
+    }
     if (this.connectedPeers.has(peerEndpoint)) {
       // Already connected to this peer
       return;
@@ -154,11 +199,16 @@ export class PeerConnectionMonitor {
     if (this.connectedPeers.has(peer.endpoint)) {
       throw new Error(`Already connected to peer: ${peer.endpoint}`);
     }
-    this.knownPeers.add(peer.endpoint);
+    if (!this.knownPeers.has(peer.endpoint)) {
+      this.knownPeers.add(peer.endpoint);
+      this.emit('peerEndpointDiscovered', peer.endpoint);
+    }
     this.connectedPeers.set(peer.endpoint, peer);
     this.storePeerState(peer.endpoint);
     peer.on('closed', () => {
       this.connectedPeers.delete(peer.endpoint);
+      this.emit('peerDisconnected', peer);
     });
+    this.emit('peerConnected', peer);
   }
 }

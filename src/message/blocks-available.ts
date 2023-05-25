@@ -88,7 +88,7 @@ export class MicroblocksAvailable
 {
   static readonly containerType =
     StacksMessageContainerTypeID.MicroblocksAvailable;
-  readonly containerType = BlocksAvailable.containerType;
+  readonly containerType = MicroblocksAvailable.containerType;
 
   /**
    * List of blocks available.

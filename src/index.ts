@@ -11,6 +11,7 @@ import {
   startPrometheusServer,
 } from './server/prometheus-server';
 import { PeerConnectionMonitor } from './peer-connection-monitor';
+import { setupPeerInfoLogging } from './peer-logging';
 
 async function init() {
   setupShutdownHandler();
@@ -23,12 +24,12 @@ async function init() {
   await startControlPlaneServer(metrics);
   await startPrometheusServer();
 
-  await timeout(5000);
-  const defaultStacksPeerAddr = getDefaultStacksNodePeerAddress();
   const peerConnections = PeerConnectionMonitor.instance;
+  setupPeerInfoLogging(peerConnections);
+
   peerConnections.startPeriodicReconnecting();
   peerConnections.startPeerNeighborScanning();
-  peerConnections.registerPeerEndpoint(defaultStacksPeerAddr);
+  peerConnections.registerPeerEndpoint(getDefaultStacksNodePeerAddress());
   peerConnections.loadPeersFromStorage();
 }
 

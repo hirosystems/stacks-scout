@@ -24,6 +24,14 @@ import { Ping } from './message/ping';
 import { Pong } from './message/pong';
 import { PeerEndpoint } from './peer-endpoint';
 import { Nack } from './message/nack';
+import { Blocks } from './message/blocks';
+import { Transaction } from './message/transaction';
+import { Microblocks } from './message/microblocks';
+import {
+  BlocksAvailable,
+  MicroblocksAvailable,
+} from './message/blocks-available';
+import { HandshakeReject } from './message/handshake-reject';
 
 // From src/core/mod.rs
 
@@ -61,8 +69,8 @@ const STABLE_CONFIRMATIONS_TESTNET = 7;
 const STABLE_CONFIRMATIONS_REGTEST = 1;
 
 export enum PeerDirection {
-  Inbound,
-  Outbound,
+  Inbound = 'inbound',
+  Outbound = 'outbound',
 }
 
 interface StacksPeerEvents {
@@ -79,11 +87,29 @@ interface StacksPeerEvents {
   handshakeAcceptMessageReceived: (
     message: StacksMessageEnvelope<HandshakeAccept>
   ) => void | Promise<void>;
+  handshakeRejectMessageReceived: (
+    message: StacksMessageEnvelope<HandshakeReject>
+  ) => void | Promise<void>;
   getNeighborsMessageReceived: (
     message: StacksMessageEnvelope<GetNeighbors>
   ) => void | Promise<void>;
   nackMessageReceived: (
     message: StacksMessageEnvelope<Nack>
+  ) => void | Promise<void>;
+  transactionMessageReceived: (
+    message: StacksMessageEnvelope<Transaction>
+  ) => void | Promise<void>;
+  microblocksMessageReceived: (
+    message: StacksMessageEnvelope<Microblocks>
+  ) => void | Promise<void>;
+  blocksMessageReceived: (
+    message: StacksMessageEnvelope<Blocks>
+  ) => void | Promise<void>;
+  blocksAvailableMessageReceived: (
+    message: StacksMessageEnvelope<BlocksAvailable>
+  ) => void | Promise<void>;
+  microblocksAvailableMessageReceived: (
+    message: StacksMessageEnvelope<MicroblocksAvailable>
   ) => void | Promise<void>;
 }
 
@@ -326,6 +352,12 @@ export class StacksPeer extends EventEmitter {
             receivedMsg as StacksMessageEnvelope<HandshakeAccept>
           );
           break;
+        case StacksMessageContainerTypeID.HandshakeReject:
+          this.emit(
+            'handshakeRejectMessageReceived',
+            receivedMsg as StacksMessageEnvelope<HandshakeReject>
+          );
+          break;
         case StacksMessageContainerTypeID.GetNeighbors:
           this.emit(
             'getNeighborsMessageReceived',
@@ -342,6 +374,36 @@ export class StacksPeer extends EventEmitter {
           this.emit(
             'nackMessageReceived',
             receivedMsg as StacksMessageEnvelope<Nack>
+          );
+          break;
+        case StacksMessageContainerTypeID.Transaction:
+          this.emit(
+            'transactionMessageReceived',
+            receivedMsg as StacksMessageEnvelope<Transaction>
+          );
+          break;
+        case StacksMessageContainerTypeID.Blocks:
+          this.emit(
+            'blocksMessageReceived',
+            receivedMsg as StacksMessageEnvelope<Blocks>
+          );
+          break;
+        case StacksMessageContainerTypeID.Microblocks:
+          this.emit(
+            'microblocksMessageReceived',
+            receivedMsg as StacksMessageEnvelope<Microblocks>
+          );
+          break;
+        case StacksMessageContainerTypeID.BlocksAvailable:
+          this.emit(
+            'blocksAvailableMessageReceived',
+            receivedMsg as StacksMessageEnvelope<BlocksAvailable>
+          );
+          break;
+        case StacksMessageContainerTypeID.MicroblocksAvailable:
+          this.emit(
+            'microblocksAvailableMessageReceived',
+            receivedMsg as StacksMessageEnvelope<MicroblocksAvailable>
           );
           break;
       }
@@ -529,9 +591,6 @@ export class StacksPeer extends EventEmitter {
 
     const peer = new this(socket, PeerDirection.Outbound, metrics);
     logger.info(`Connected to Stacks peer: ${peer.endpoint}`);
-
-    const handshakeReply = await peer.performHandshake();
-    logger.info(`Handshake accepted by peer: ${peer.endpoint}`);
 
     return peer;
   }
