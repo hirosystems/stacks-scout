@@ -1,6 +1,6 @@
 import * as net from 'node:net';
 import { EventEmitter, captureRejectionSymbol } from 'node:events';
-import { ENV, INT, WeakDictionary, logger } from './util';
+import { ENV, INT, WeakDictionary, logger, timeout } from './util';
 import { PeerAddress } from './message/peer-address';
 import { RelayDataVec } from './message/relay-data';
 import { MessageSignature } from './message/message-signature';
@@ -99,6 +99,9 @@ interface StacksPeerEvents {
   pingMessageReceived: (
     message: StacksMessageEnvelope<Ping>
   ) => void | Promise<void>;
+  handshakeMessageReceived: (
+    message: StacksMessageEnvelope<Handshake>
+  ) => void | Promise<void>;
 }
 
 export class StacksPeer extends EventEmitter {
@@ -136,6 +139,8 @@ export class StacksPeer extends EventEmitter {
     this.socket = socket;
     this.setupSocketEvents();
     this.setupPongResponder();
+    this.setupHandshakeResponder();
+    this.setupPinging();
     peerConnections.register(this);
   }
 
@@ -180,10 +185,67 @@ export class StacksPeer extends EventEmitter {
     });
   }
 
+  private async setupPinging() {
+    const socketClosedPromise = new Promise<void>((resolve) => {
+      this.socket.once('close', () => resolve());
+    });
+
+    // wait for the handshake to complete before starting to ping (or for the socket to close)
+    await Promise.race([
+      socketClosedPromise,
+      this.waitForMessage(
+        (msg) =>
+          msg.payload.containerType ===
+          StacksMessageContainerTypeID.HandshakeAccept
+      ),
+    ]);
+    if (this.socket.closed) {
+      return;
+    }
+
+    const pingInterval = 10_000;
+    let nextPingNonce = 0;
+
+    const sendPing = async () => {
+      const pingNonce = ++nextPingNonce;
+      const ping = new Ping(pingNonce);
+      const envelope = await this.createAndSignEnvelope(ping);
+      await this.send(envelope);
+      const pong = await this.waitForMessage(
+        (msg) =>
+          msg.payload.containerType === StacksMessageContainerTypeID.Pong &&
+          msg.payload.nonce === pingNonce
+      );
+      return pong;
+    };
+
+    while (!this.socket.closed) {
+      await timeout(pingInterval);
+      try {
+        await Promise.race([socketClosedPromise, sendPing()]);
+      } catch (error) {
+        logger.error(error, 'Error pinging peer');
+      }
+    }
+  }
+
   private setupPongResponder() {
     this.on('pingMessageReceived', async (message) => {
       const pong = new Pong(message.payload.nonce);
       const envelope = await this.createAndSignEnvelope(pong);
+      await this.send(envelope);
+    });
+  }
+
+  private setupHandshakeResponder() {
+    this.on('handshakeMessageReceived', async (message) => {
+      const handshakeData = this.createHandshakeData();
+      const heartbeatIntervalSeconds = 60;
+      const handshakeResponse = new HandshakeAccept(
+        handshakeData,
+        heartbeatIntervalSeconds
+      );
+      const envelope = await this.createAndSignEnvelope(handshakeResponse);
       await this.send(envelope);
     });
   }
@@ -234,14 +296,21 @@ export class StacksPeer extends EventEmitter {
       );
       this.emit('messageReceived', receivedMsg);
 
-      if (
-        receivedMsg.payload.containerType === StacksMessageContainerTypeID.Ping
-      ) {
-        this.emit(
-          'pingMessageReceived',
-          receivedMsg as StacksMessageEnvelope<Ping>
-        );
+      switch (receivedMsg.payload.containerType) {
+        case StacksMessageContainerTypeID.Handshake:
+          this.emit(
+            'handshakeMessageReceived',
+            receivedMsg as StacksMessageEnvelope<Handshake>
+          );
+          break;
+        case StacksMessageContainerTypeID.Ping:
+          this.emit(
+            'pingMessageReceived',
+            receivedMsg as StacksMessageEnvelope<Ping>
+          );
+          break;
       }
+
       // EXAMPLE metric manipulation
       // this.metrics.stacks_scout_discovered_nodes.inc();
 
@@ -333,17 +402,23 @@ export class StacksPeer extends EventEmitter {
     return envelope;
   }
 
-  async performHandshake(): Promise<StacksMessageEnvelope<HandshakeAccept>> {
-    const handshake = new Handshake(
-      new HandshakeData(
-        new PeerAddress('127.0.0.1'),
-        ENV.CONTROL_PLANE_PORT,
-        0x0001,
-        this.pubKey.toString('hex'),
-        100000n,
-        ENV.DATA_PLANE_PUBLIC_URL
-      )
+  private createHandshakeData() {
+    // TODO: make the IP configurable via env var (or self discovery)
+    const myIP = '127.0.0.1';
+    // TODO: figure out what the servicesAvailable value should be (looks like the stacks-node uses 0x0003)
+    const servicesAvailable = 0x0003;
+    return new HandshakeData(
+      /* addrbytes */ new PeerAddress(myIP),
+      /* port */ ENV.CONTROL_PLANE_PORT,
+      /* services */ servicesAvailable,
+      /* node_public_key */ this.pubKey.toString('hex'),
+      /* expire_block_height */ 1_000_000n,
+      /* data_url */ ENV.DATA_PLANE_PUBLIC_URL
     );
+  }
+
+  async performHandshake(): Promise<StacksMessageEnvelope<HandshakeAccept>> {
+    const handshake = new Handshake(this.createHandshakeData());
     const envelope = await this.createAndSignEnvelope(handshake);
     this.send(envelope);
     const handshakeReply = await this.waitForMessage(
