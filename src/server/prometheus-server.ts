@@ -17,7 +17,7 @@ export class StacksPeerMetrics {
   /** Rate at which mempool transactions are being included in mined blocks for configured network */
   readonly stacks_scout_mempool_inclusion_rate_bucket: prom.Histogram;
   /** Peer Stacks node versions */
-  readonly stacks_scout_hardfork_version: prom.Gauge;
+  readonly stacks_scout_version: prom.Gauge;
   /** Stacks node latency in milliseconds */
   readonly stacks_scout_node_request_duration_milliseconds_bucket: prom.Histogram;
 
@@ -58,8 +58,8 @@ export class StacksPeerMetrics {
       help: 'Rate at which mempool transactions are being included in mined blocks for configured network',
       buckets: [0.1, 0.25, 0.5, 0.75, 0.9, 1.0],
     });
-    this.stacks_scout_hardfork_version = new prom.Gauge({
-      name: 'stacks_scout_hardfork_version',
+    this.stacks_scout_version = new prom.Gauge({
+      name: 'stacks_scout_version',
       help: 'Peer Stacks node versions',
     });
     this.stacks_scout_node_request_duration_milliseconds_bucket =
