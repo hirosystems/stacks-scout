@@ -1,7 +1,11 @@
 import { ResizableByteStream } from '../../resizable-byte-stream';
 import { Encodeable } from '../../stacks-p2p-deser';
 import { MessageVectorArray } from '../message-vector-array';
-import { TransactionAuthorization } from './transaction-authorization';
+import {
+  SponsoredAuthorization,
+  StandardAuthorization,
+  TransactionAuthorization,
+} from './transaction-authorization';
 import {
   CoinbasePayload,
   ContractCallPayload,
@@ -17,6 +21,8 @@ export class StacksTransaction implements Encodeable {
   readonly version_number: number;
   /** (u32) */
   readonly chain_id: number;
+  /** 1 byte */
+  readonly authorization_type: number;
   /** x */
   readonly authorization: TransactionAuthorization;
   /** (u8) */
@@ -31,6 +37,7 @@ export class StacksTransaction implements Encodeable {
   constructor(
     version_number: number,
     chain_id: number,
+    authorization_type: number,
     authorization: TransactionAuthorization,
     anchor_mode: number,
     post_condition_mode: number,
@@ -40,6 +47,7 @@ export class StacksTransaction implements Encodeable {
   ) {
     this.version_number = version_number;
     this.chain_id = chain_id;
+    this.authorization_type = authorization_type;
     this.authorization = authorization;
     this.anchor_mode = anchor_mode;
     this.post_condition_mode = post_condition_mode;
@@ -51,7 +59,11 @@ export class StacksTransaction implements Encodeable {
   static decode(source: ResizableByteStream): StacksTransaction {
     const version_number = source.readUint8();
     const chain_id = source.readUint32();
-    const ta = TransactionAuthorization.decode(source);
+    const authorization_type = source.readUint8();
+    const authorization =
+      authorization_type === 0x05
+        ? SponsoredAuthorization.decode(source)
+        : StandardAuthorization.decode(source);
     const anchor_mode = source.readUint8();
     const pc_mode = source.readUint8();
     const pc = StacksTransactionPostConditionVec.decode(source);
@@ -77,7 +89,8 @@ export class StacksTransaction implements Encodeable {
     return new StacksTransaction(
       version_number,
       chain_id,
-      ta,
+      authorization_type,
+      authorization,
       anchor_mode,
       pc_mode,
       pc,

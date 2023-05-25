@@ -1,9 +1,8 @@
 import { ResizableByteStream } from '../../resizable-byte-stream';
 import { Encodeable } from '../../stacks-p2p-deser';
-import { MessageVectorArray } from '../message-vector-array';
 import { TransactionVec } from './transaction';
 
-export class Block implements Encodeable {
+export class StacksBlock implements Encodeable {
   /** (1 byte) */
   readonly version_number: number;
   /** (16 bytes) The cumulative work score for this block's fork */
@@ -49,8 +48,8 @@ export class Block implements Encodeable {
     this.transactions = transactions;
   }
 
-  static decode(source: ResizableByteStream): Block {
-    return new Block(
+  static decode(source: ResizableByteStream): StacksBlock {
+    return new StacksBlock(
       source.readUint8(),
       source.readBytesAsHexString(16),
       source.readBytesAsHexString(80),
@@ -75,14 +74,5 @@ export class Block implements Encodeable {
     target.writeBytesFromHexString(this.state_merkle_root);
     target.writeBytesFromHexString(this.microblock_public_key_hash);
     this.transactions.encode(target);
-  }
-}
-
-export class StacksBlockVec extends MessageVectorArray<Block> {
-  constructor(items?: Block[]) {
-    super(items);
-  }
-  static decode(source: ResizableByteStream): StacksBlockVec {
-    return new this().decode(source, Block);
   }
 }

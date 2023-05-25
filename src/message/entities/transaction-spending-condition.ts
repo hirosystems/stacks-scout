@@ -8,15 +8,15 @@ export abstract class StacksTransactionSpendingCondition implements Encodeable {
   /** 20 bytes */
   readonly public_key_hash: string;
   /** 8 byte */
-  readonly nonce: number;
+  readonly nonce: bigint;
   /** 8 byte */
-  readonly fee: number;
+  readonly fee: bigint;
 
   constructor(
     hash_mode: number,
     public_key_hash: string,
-    nonce: number,
-    fee: number
+    nonce: bigint,
+    fee: bigint
   ) {
     this.hash_mode = hash_mode;
     this.public_key_hash = public_key_hash;
@@ -27,8 +27,8 @@ export abstract class StacksTransactionSpendingCondition implements Encodeable {
   static decode(
     source: ResizableByteStream
   ): StacksTransactionSpendingCondition {
-    const type = source.peekUint8();
-    if (type === 0x01 || type === 0x03) {
+    const hash_mode = source.peekUint8();
+    if (hash_mode === 0x01 || hash_mode === 0x03) {
       return MultisigSpendingCondition.decode(source);
     }
     return SinglesigSpendingCondition.decode(source);
@@ -46,8 +46,8 @@ class SinglesigSpendingCondition extends StacksTransactionSpendingCondition {
   constructor(
     hash_mode: number,
     public_key_hash: string,
-    nonce: number,
-    fee: number,
+    nonce: bigint,
+    fee: bigint,
     public_key_encoding: number,
     ecdsa_signature: string
   ) {
@@ -60,8 +60,8 @@ class SinglesigSpendingCondition extends StacksTransactionSpendingCondition {
     return new SinglesigSpendingCondition(
       source.readUint8(),
       source.readBytesAsHexString(20),
-      source.readUint32(),
-      source.readUint32(),
+      source.readUint64(),
+      source.readUint64(),
       source.readUint8(),
       source.readBytesAsHexString(65)
     );
@@ -120,8 +120,8 @@ class MultisigSpendingCondition extends StacksTransactionSpendingCondition {
   constructor(
     hash_mode: number,
     public_key_hash: string,
-    nonce: number,
-    fee: number,
+    nonce: bigint,
+    fee: bigint,
     authorization_fields: MultisigAuthorizationFieldVec,
     signature_count: number
   ) {
@@ -134,8 +134,8 @@ class MultisigSpendingCondition extends StacksTransactionSpendingCondition {
     return new MultisigSpendingCondition(
       source.readUint8(),
       source.readBytesAsHexString(20),
-      source.readUint32(),
-      source.readUint32(),
+      source.readUint64(),
+      source.readUint64(),
       MultisigAuthorizationFieldVec.decode(source),
       source.readUint16()
     );
