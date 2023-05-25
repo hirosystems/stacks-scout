@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Launch Program",
+      "name": "Launch regtest",
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "node",
@@ -19,18 +19,33 @@
       ],
       "args": [
         "src/index.ts",
-        "--example",
-        "hello"
       ],
       "envFile": "${workspaceFolder}/.env-dev",
       "cwd": "${workspaceRoot}",
       "internalConsoleOptions": "openOnSessionStart",
-      "skipFiles": [
-        // "<node_internals>/**",
-        // "node_modules/**"
-      ],
       "preLaunchTask": "docker-compose-up",
       "postDebugTask": "docker-compose-down",
+      "outputCapture": "std"
+    },
+    {
+      "name": "Launch mainnet",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "node",
+      "runtimeVersion": "20",
+      "nodeVersionHint": 20,
+      "killBehavior": "polite",
+      "runtimeArgs": [
+        "--nolazy",
+        "-r",
+        "ts-node/register"
+      ],
+      "args": [
+        "src/index.ts",
+      ],
+      "envFile": "${workspaceFolder}/.env-mainnet",
+      "cwd": "${workspaceRoot}",
+      "internalConsoleOptions": "openOnSessionStart",
       "outputCapture": "std"
     },
     {
@@ -52,7 +67,6 @@
         "<node_internals>/**",
         "**/node_modules/**"
       ],
-      // "console": "integratedTerminal",
       "outputCapture": "std",
       "internalConsoleOptions": "neverOpen",
       "sourceMaps": true,
@@ -78,7 +92,6 @@
         "<node_internals>/**",
         "**/node_modules/**"
       ],
-      // "console": "integratedTerminal",
       "outputCapture": "std",
       "internalConsoleOptions": "neverOpen",
       "sourceMaps": true,

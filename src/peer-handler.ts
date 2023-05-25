@@ -9,7 +9,6 @@ import { StacksMessageEnvelope } from './message/stacks-message-envelope';
 import { ResizableByteStream } from './resizable-byte-stream';
 import { Handshake } from './message/handshake';
 import { Preamble } from './message/preamble';
-import { getBtcBlockHashByHeight, getBtcChainInfo } from './bitcoin-net';
 import { StacksPeerMetrics } from './server/prometheus-server';
 import { HandshakeData } from './message/handshake-data';
 import { GetNeighbors } from './message/get-neighbors';
@@ -32,6 +31,7 @@ import {
   MicroblocksAvailable,
 } from './message/blocks-available';
 import { HandshakeReject } from './message/handshake-reject';
+import { BitcoinNetInstance } from './bitcoin-net';
 
 // From src/core/mod.rs
 
@@ -51,15 +51,12 @@ const PEER_VERSION_EPOCH_2_3 = 0x08;
 const PEER_VERSION_EPOCH_2_4 = 0x09;
 
 // this should be updated to the latest network epoch version supported by this node
-// const PEER_NETWORK_EPOCH = PEER_VERSION_EPOCH_2_4;
+const PEER_NETWORK_EPOCH = PEER_VERSION_EPOCH_2_4;
 
 // set the fourth byte of the peer version
-const PEER_VERSION_MAINNET =
-  PEER_VERSION_MAINNET_MAJOR | PEER_VERSION_EPOCH_2_3;
-const PEER_VERSION_TESTNET =
-  PEER_VERSION_TESTNET_MAJOR | PEER_VERSION_EPOCH_2_4;
-const PEER_VERSION_REGTEST =
-  PEER_VERSION_TESTNET_MAJOR | PEER_VERSION_EPOCH_2_4;
+const PEER_VERSION_MAINNET = PEER_VERSION_MAINNET_MAJOR | PEER_NETWORK_EPOCH;
+const PEER_VERSION_TESTNET = PEER_VERSION_TESTNET_MAJOR | PEER_NETWORK_EPOCH;
+const PEER_VERSION_REGTEST = PEER_VERSION_TESTNET_MAJOR | PEER_NETWORK_EPOCH;
 
 const NETWORK_ID_MAINNET = 0x00000001;
 const NETWORK_ID_TESTNET = 0x80000000;
@@ -244,7 +241,7 @@ export class StacksPeer extends EventEmitter {
 
   private setupHandshakeResponder() {
     this.on('handshakeMessageReceived', async (message) => {
-      const handshakeData = this.createHandshakeData();
+      const handshakeData = await this.createHandshakeData();
       const heartbeatIntervalSeconds = 60;
       const handshakeResponse = new HandshakeAccept(
         handshakeData,
@@ -469,23 +466,18 @@ export class StacksPeer extends EventEmitter {
         break;
     }
 
-    const btcChainInfo = await getBtcChainInfo();
-    const btcStableBurnHeight = btcChainInfo.blocks - stableConfirmations;
-    const latestBtcBlockHash = await getBtcBlockHashByHeight(
-      btcChainInfo.blocks
-    );
-    const stableBtcBlockHash = await getBtcBlockHashByHeight(
-      btcStableBurnHeight
+    const btcInfo = await BitcoinNetInstance.getLatestBlock(
+      stableConfirmations
     );
 
     const preamble = new Preamble(
       /* peer_version */ peerVersion,
       /* network_id */ networkID,
       /* seq */ seqNum,
-      /* burn_block_height */ BigInt(btcChainInfo.blocks),
-      /* burn_header_hash */ new BurnchainHeaderHash(latestBtcBlockHash),
-      /* stable_burn_block_height */ BigInt(btcStableBurnHeight),
-      /* stable_burn_header_hash */ new BurnchainHeaderHash(stableBtcBlockHash),
+      /* burn_block_height */ BigInt(btcInfo.height),
+      /* burn_header_hash */ new BurnchainHeaderHash(btcInfo.hash),
+      /* stable_burn_block_height */ BigInt(btcInfo.stableHeight),
+      /* stable_burn_header_hash */ new BurnchainHeaderHash(btcInfo.stableHash),
       /* additional_data */ 0,
       /* signature */ MessageSignature.empty(),
       /* payload_len */ 0
@@ -499,9 +491,12 @@ export class StacksPeer extends EventEmitter {
     return envelope;
   }
 
-  private createHandshakeData() {
-    // TODO: make the IP configurable via env var (or self discovery)
-    const myIP = '127.0.0.1';
+  private async createHandshakeData() {
+    const myIP =
+      ENV.DATA_PLANE_PUBLIC_HOST === 'auto'
+        ? await getPublicIP()
+        : ENV.DATA_PLANE_PUBLIC_HOST;
+    const dataUrl = `http://${myIP}:${ENV.DATA_PLANE_PUBLIC_PORT}`;
     // TODO: figure out what the servicesAvailable value should be (looks like the stacks-node uses 0x0003)
     const servicesAvailable = 0x0003;
     return new HandshakeData(
@@ -509,13 +504,13 @@ export class StacksPeer extends EventEmitter {
       /* port */ ENV.CONTROL_PLANE_PORT,
       /* services */ servicesAvailable,
       /* node_public_key */ getPeerKeyPair().pubKey.toString('hex'),
-      /* expire_block_height */ 1_000_000n,
-      /* data_url */ ENV.DATA_PLANE_PUBLIC_URL
+      /* expire_block_height */ 10_000_000n,
+      /* data_url */ dataUrl
     );
   }
 
   async performHandshake(): Promise<StacksMessageEnvelope<HandshakeAccept>> {
-    const handshake = new Handshake(this.createHandshakeData());
+    const handshake = new Handshake(await this.createHandshakeData());
     const envelope = await this.createAndSignEnvelope(handshake);
     this.send(envelope);
     const handshakeReply = await this.waitForMessage(

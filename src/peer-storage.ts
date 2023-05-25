@@ -55,7 +55,11 @@ export class PeerStorage {
   private static _openInstances = new Map<string, PeerStorage>();
   static open(): PeerStorage {
     const fileName = 'peer-storage.sqlite';
-    const filePath = path.resolve(ENV.DATA_STORAGE_DIR, fileName);
+    const filePath = path.resolve(
+      ENV.DATA_STORAGE_DIR,
+      ENV.STACKS_NETWORK_NAME,
+      fileName
+    );
     let storage = this._openInstances.get(filePath);
     if (storage === undefined) {
       storage = new PeerStorage(filePath);
@@ -75,15 +79,15 @@ export class PeerStorage {
     return PeerState.fromString(endpoint, row.value);
   }
 
-  *getPeers() {
+  getPeers() {
     const rows = this.db
       .prepare(`SELECT key, value FROM ${this.TABLE.peer_state}`)
-      .iterate() as IterableIterator<{ key: string; value: string }>;
-    for (const row of rows) {
+      .all() as { key: string; value: string }[];
+    return rows.map((row) => {
       const endpoint = PeerEndpoint.fromString(row.key);
       const peer = PeerState.fromString(endpoint, row.value);
-      yield peer;
-    }
+      return peer;
+    });
   }
 
   setPeerState(peer: PeerState) {

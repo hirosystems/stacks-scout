@@ -99,7 +99,7 @@ export class PeerConnectionMonitor {
       peers.forEach((peer) => {
         this.connectToPeer(peer);
       });
-    });
+    }, this.reconnectInterval);
   }
 
   /**
