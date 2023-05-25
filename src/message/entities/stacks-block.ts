@@ -1,6 +1,6 @@
 import { ResizableByteStream } from '../../resizable-byte-stream';
 import { Encodeable } from '../../stacks-p2p-deser';
-import { TransactionVec } from './transaction';
+import { StacksTransactionVec } from './stacks-transaction';
 
 export class StacksBlock implements Encodeable {
   /** (1 byte) */
@@ -22,7 +22,7 @@ export class StacksBlock implements Encodeable {
   readonly state_merkle_root: string;
   /** (20 bytes) */
   readonly microblock_public_key_hash: string;
-  readonly transactions: TransactionVec;
+  readonly transactions: StacksTransactionVec;
 
   constructor(
     version_number: number,
@@ -34,7 +34,7 @@ export class StacksBlock implements Encodeable {
     transaction_merkle_root: string,
     state_merkle_root: string,
     microblock_public_key_hash: string,
-    transactions: TransactionVec
+    transactions: StacksTransactionVec
   ) {
     this.version_number = version_number;
     this.cumulative_work_score = cumulative_work_score;
@@ -59,7 +59,7 @@ export class StacksBlock implements Encodeable {
       source.readBytesAsHexString(32),
       source.readBytesAsHexString(32),
       source.readBytesAsHexString(20),
-      TransactionVec.decode(source)
+      StacksTransactionVec.decode(source)
     );
   }
 

@@ -4,16 +4,30 @@ import {
   StacksMessageContainerTypeID,
   StacksMessageTypedContainer,
 } from '../stacks-p2p-deser';
+import { MicroblockHeader } from './entities/microblock-header';
+import { StacksTransactionVec } from './entities/stacks-transaction';
 import { MessageVectorArray } from './message-vector-array';
 import { StacksBlockId } from './stacks-block-id';
 
 export class StacksMicroblock implements Encodeable {
-  // TODO: see SIP 005 for fields
-  static decode(source: ResizableByteStream): Microblocks {
-    throw new Error('Not implemented');
+  readonly header: MicroblockHeader;
+  readonly transactions: StacksTransactionVec;
+
+  constructor(header: MicroblockHeader, transctions: StacksTransactionVec) {
+    this.header = header;
+    this.transactions = transctions;
   }
+
+  static decode(source: ResizableByteStream): StacksMicroblock {
+    return new StacksMicroblock(
+      MicroblockHeader.decode(source),
+      StacksTransactionVec.decode(source)
+    );
+  }
+
   encode(target: ResizableByteStream): void {
-    throw new Error('Not implemented');
+    this.header.encode(target);
+    this.transactions.encode(target);
   }
 }
 

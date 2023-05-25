@@ -111,11 +111,11 @@ export class StacksTransaction implements Encodeable {
   }
 }
 
-export class TransactionVec extends MessageVectorArray<StacksTransaction> {
+export class StacksTransactionVec extends MessageVectorArray<StacksTransaction> {
   constructor(items?: StacksTransaction[]) {
     super(items);
   }
-  static decode(source: ResizableByteStream): TransactionVec {
+  static decode(source: ResizableByteStream): StacksTransactionVec {
     return new this().decode(source, StacksTransaction);
   }
 }
