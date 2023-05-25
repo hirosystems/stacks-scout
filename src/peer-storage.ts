@@ -6,9 +6,10 @@ import { ENV } from './util';
 
 export class PeerState {
   endpoint: PeerEndpoint;
-  lastMessageReceivedAt = 0;
+  lastHandshakeAcceptAt = 0;
   lastPongReceivedAt = 0;
-  lastPingSentAt = 0;
+  lastBlockHeight = 0;
+  lastBlockHash = '';
   lastBurnBlockHeight = 0;
   lastBurnBlockHash = '';
   registeredAt = 0;
