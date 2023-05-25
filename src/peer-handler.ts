@@ -32,6 +32,8 @@ import {
 } from './message/blocks-available';
 import { HandshakeReject } from './message/handshake-reject';
 import { BitcoinNetInstance } from './bitcoin-net';
+import { GetBlocksInv } from './message/get-blocks-inv';
+import { GetPoxInv } from './message/get-pox-inv';
 
 // From src/core/mod.rs
 
@@ -111,6 +113,12 @@ interface StacksPeerEvents {
   microblocksAvailableMessageReceived: (
     message: StacksMessageEnvelope<MicroblocksAvailable>
   ) => void | Promise<void>;
+  getBlocksInvMessageReceived: (
+    message: StacksMessageEnvelope<GetBlocksInv>
+  ) => void | Promise<void>;
+  getPoxInvMessageReceived: (
+    message: StacksMessageEnvelope<GetPoxInv>
+  ) => void | Promise<void>;
 }
 
 export class StacksPeer extends EventEmitter {
@@ -142,6 +150,8 @@ export class StacksPeer extends EventEmitter {
     this.setupPongResponder();
     this.setupHandshakeResponder();
     this.setupNeighborsResponder();
+    this.setupGetBlocksInvResponder();
+    this.setupGetPoxInvResponder();
     this.setupNackHandler();
     this.setupPinging();
     this.once('handshakeAcceptMessageReceived', () => {
@@ -270,6 +280,26 @@ export class StacksPeer extends EventEmitter {
       const neighbors = new Neighbors(new NeighborsVec(neighborAddrs));
       const envelope = await this.createAndSignEnvelope(neighbors);
       await this.send(envelope);
+    });
+  }
+
+  private setupGetBlocksInvResponder() {
+    this.on('getBlocksInvMessageReceived', (msg) => {
+      // TODO: implement BlocksInv reply
+      logger.warn(
+        msg,
+        `Uh oh! Peer ${this.endpoint} requested blocks inv and we don't have an answer`
+      );
+    });
+  }
+
+  private setupGetPoxInvResponder() {
+    this.on('getPoxInvMessageReceived', (msg) => {
+      // TODO: implement PoxInv reply
+      logger.warn(
+        msg,
+        `Uh oh! Peer ${this.endpoint} requested pox inv and we don't have an answer`
+      );
     });
   }
 
@@ -410,6 +440,18 @@ export class StacksPeer extends EventEmitter {
           this.emit(
             'microblocksAvailableMessageReceived',
             receivedMsg as StacksMessageEnvelope<MicroblocksAvailable>
+          );
+          break;
+        case StacksMessageContainerTypeID.GetBlocksInv:
+          this.emit(
+            'getBlocksInvMessageReceived',
+            receivedMsg as StacksMessageEnvelope<GetBlocksInv>
+          );
+          break;
+        case StacksMessageContainerTypeID.GetPoxInv:
+          this.emit(
+            'getPoxInvMessageReceived',
+            receivedMsg as StacksMessageEnvelope<GetPoxInv>
           );
           break;
       }
