@@ -2,15 +2,33 @@ import { PeerConnectionMonitor } from './peer-connection-monitor';
 import { StacksPeerMetrics } from './server/prometheus-server';
 import { ENV, logger } from './util';
 
+type PeerIpAddress = string;
+
+interface PeerInfo {
+  peer_version: string;
+  network_id: string;
+  burn_block_height: bigint;
+  port: number;
+}
+
+function u32HexString(peer_version: number): string {
+  const version = Buffer.alloc(4);
+  version.writeUInt32BE(peer_version);
+  return `0x${version.toString('hex')}`;
+}
+
 export function setupPeerInfoLogging(
   peerConnections: PeerConnectionMonitor,
   metrics: StacksPeerMetrics
 ) {
-  const peerMap = new Set<string>();
+  const peerMap = new Map<PeerIpAddress, PeerInfo>();
 
   setInterval(() => {
-    for (const peer of peerMap) {
-      logger.info({ stacks_node_ip: peer }, `Stacks node peer report`);
+    for (const [ip, values] of peerMap) {
+      logger.info(
+        { stacks_node_ip: ip, info: values },
+        `Stacks node peer report`
+      );
     }
   }, ENV.PEER_REPORT_INTERVAL_MS);
 
@@ -24,6 +42,7 @@ export function setupPeerInfoLogging(
 
   peerConnections.on('peerDisconnected', (peer) => {
     metrics.stacks_scout_connected_peers.dec();
+    peerMap.delete(peer.endpoint.ipAddress);
     logger.debug(
       {
         event: 'peerDisconnected',
@@ -47,11 +66,14 @@ export function setupPeerInfoLogging(
 
     peer.on('handshakeAcceptMessageReceived', (message) => {
       if (!peerMap.has(peer.endpoint.ipAddress)) {
-        peerMap.add(peer.endpoint.ipAddress);
-        const version = Buffer.alloc(4);
-        version.writeUInt32BE(message.preamble.peer_version);
+        peerMap.set(peer.endpoint.ipAddress, {
+          peer_version: u32HexString(message.preamble.peer_version),
+          network_id: u32HexString(message.preamble.network_id),
+          burn_block_height: message.preamble.burn_block_height,
+          port: peer.endpoint.port,
+        });
         metrics.stacks_scout_version.inc({
-          version: `0x${version.toString('hex')}`,
+          version: u32HexString(message.preamble.peer_version),
         });
       }
       logger.debug(
