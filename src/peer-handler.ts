@@ -1,6 +1,6 @@
 import * as net from 'node:net';
-import { EventEmitter } from 'node:events';
-import { ENV, WeakDictionary, logger } from './util';
+import { EventEmitter, captureRejectionSymbol } from 'node:events';
+import { ENV, INT, WeakDictionary, logger } from './util';
 import { PeerAddress } from './message/peer-address';
 import { RelayDataVec } from './message/relay-data';
 import { MessageSignature } from './message/message-signature';
@@ -22,6 +22,8 @@ import {
 } from './stacks-p2p-deser';
 import { HandshakeAccept } from './message/handshake-accept';
 import { Neighbors } from './message/neighbors';
+import { Ping } from './message/ping';
+import { Pong } from './message/pong';
 
 // From src/core/mod.rs
 
@@ -41,11 +43,15 @@ const PEER_VERSION_EPOCH_2_3 = 0x08;
 const PEER_VERSION_EPOCH_2_4 = 0x09;
 
 // this should be updated to the latest network epoch version supported by this node
-const PEER_NETWORK_EPOCH = PEER_VERSION_EPOCH_2_4;
+// const PEER_NETWORK_EPOCH = PEER_VERSION_EPOCH_2_4;
 
 // set the fourth byte of the peer version
-const PEER_VERSION_MAINNET = PEER_VERSION_MAINNET_MAJOR | PEER_NETWORK_EPOCH;
-const PEER_VERSION_TESTNET = PEER_VERSION_TESTNET_MAJOR | PEER_NETWORK_EPOCH;
+const PEER_VERSION_MAINNET =
+  PEER_VERSION_MAINNET_MAJOR | PEER_VERSION_EPOCH_2_3;
+const PEER_VERSION_TESTNET =
+  PEER_VERSION_TESTNET_MAJOR | PEER_VERSION_EPOCH_2_4;
+const PEER_VERSION_REGTEST =
+  PEER_VERSION_TESTNET_MAJOR | PEER_VERSION_EPOCH_2_4;
 
 const NETWORK_ID_MAINNET = 0x00000001;
 const NETWORK_ID_TESTNET = 0x80000000;
@@ -90,6 +96,9 @@ interface StacksPeerEvents {
   socketError: (error: Error) => void | Promise<void>;
   open: () => void | Promise<void>;
   messageReceived: (message: StacksMessageEnvelope) => void | Promise<void>;
+  pingMessageReceived: (
+    message: StacksMessageEnvelope<Ping>
+  ) => void | Promise<void>;
 }
 
 export class StacksPeer extends EventEmitter {
@@ -104,12 +113,14 @@ export class StacksPeer extends EventEmitter {
   /** epoch in milliseconds, zero for never */
   lastSeen = 0;
 
+  lastMessageSeqNumber = 0;
+
   constructor(
     socket: net.Socket,
     direction: PeerDirection,
     metrics: StacksPeerMetrics
   ) {
-    super();
+    super({ captureRejections: true });
     this.direction = direction;
     this.address = new PeerEndpoint(
       socket.remoteAddress as string,
@@ -123,8 +134,13 @@ export class StacksPeer extends EventEmitter {
     } while (!secp256k1.privateKeyVerify(this.privKey));
     this.pubKey = Buffer.from(secp256k1.publicKeyCreate(this.privKey));
     this.socket = socket;
-    this.listen();
+    this.setupSocketEvents();
+    this.setupPongResponder();
     peerConnections.register(this);
+  }
+
+  [captureRejectionSymbol](error: any, event: string, ...args: any[]) {
+    logger.error(error, `Unhandled rejection for event ${event}`);
   }
 
   on<T extends keyof StacksPeerEvents>(
@@ -148,8 +164,8 @@ export class StacksPeer extends EventEmitter {
     return super.emit(eventName, ...args);
   }
 
-  private listen() {
-    this.setupDataReader();
+  private setupSocketEvents() {
+    this.createSocketDataReader();
     this.socket.on('error', (err) => {
       logger.error(err, 'Error on peer socket');
       this.emit('socketError', err);
@@ -164,7 +180,15 @@ export class StacksPeer extends EventEmitter {
     });
   }
 
-  private setupDataReader() {
+  private setupPongResponder() {
+    this.on('pingMessageReceived', async (message) => {
+      const pong = new Pong(message.payload.nonce);
+      const envelope = await this.createAndSignEnvelope(pong);
+      await this.send(envelope);
+    });
+  }
+
+  private createSocketDataReader() {
     // the left over data from the last received chunk
     let lastChunk = Buffer.alloc(0);
 
@@ -210,6 +234,14 @@ export class StacksPeer extends EventEmitter {
       );
       this.emit('messageReceived', receivedMsg);
 
+      if (
+        receivedMsg.payload.containerType === StacksMessageContainerTypeID.Ping
+      ) {
+        this.emit(
+          'pingMessageReceived',
+          receivedMsg as StacksMessageEnvelope<Ping>
+        );
+      }
       // EXAMPLE metric manipulation
       // this.metrics.stacks_scout_discovered_nodes.inc();
 
@@ -236,9 +268,19 @@ export class StacksPeer extends EventEmitter {
     });
   }
 
+  private getNextSeqNumber(): number {
+    // increment (wrapping if necessary) the sequence number
+    const seqNum = this.lastMessageSeqNumber++;
+    if (seqNum >= INT.MAX_U32) {
+      this.lastMessageSeqNumber = 0;
+    }
+    return seqNum;
+  }
+
   async createAndSignEnvelope(
     message: StacksMessageContainerType
   ): Promise<StacksMessageEnvelope> {
+    const seqNum = this.getNextSeqNumber();
     let peerVersion: number;
     let networkID: number;
     let stableConfirmations: number;
@@ -255,7 +297,7 @@ export class StacksPeer extends EventEmitter {
         stableConfirmations = STABLE_CONFIRMATIONS_TESTNET;
         break;
       case 'regtest':
-        peerVersion = PEER_VERSION_TESTNET;
+        peerVersion = PEER_VERSION_REGTEST;
         networkID = NETWORK_ID_TESTNET;
         stableConfirmations = STABLE_CONFIRMATIONS_REGTEST;
         break;
@@ -273,7 +315,7 @@ export class StacksPeer extends EventEmitter {
     const preamble = new Preamble(
       /* peer_version */ peerVersion,
       /* network_id */ networkID,
-      /* seq */ 0,
+      /* seq */ seqNum,
       /* burn_block_height */ BigInt(btcChainInfo.blocks),
       /* burn_header_hash */ new BurnchainHeaderHash(latestBtcBlockHash),
       /* stable_burn_block_height */ BigInt(btcStableBurnHeight),
