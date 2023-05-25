@@ -25,6 +25,7 @@ import { Neighbors } from './message/neighbors';
 import { Ping } from './message/ping';
 import { Pong } from './message/pong';
 import { PeerEndpoint } from './peer-endpoint';
+import { Nack } from './message/nack';
 
 // From src/core/mod.rs
 
@@ -80,6 +81,9 @@ interface StacksPeerEvents {
   handshakeAcceptMessageReceived: (
     message: StacksMessageEnvelope<HandshakeAccept>
   ) => void | Promise<void>;
+  nackMessageReceived: (
+    message: StacksMessageEnvelope<Nack>
+  ) => void | Promise<void>;
 }
 
 export class StacksPeer extends EventEmitter {
@@ -120,6 +124,7 @@ export class StacksPeer extends EventEmitter {
     this.setupSocketEvents();
     this.setupPongResponder();
     this.setupHandshakeResponder();
+    this.setupNackHandler();
     this.setupPinging();
     this.once('handshakeAcceptMessageReceived', () => {
       this.handshakeCompleted = true;
@@ -232,6 +237,14 @@ export class StacksPeer extends EventEmitter {
     });
   }
 
+  private setupNackHandler() {
+    this.on('nackMessageReceived', (message) => {
+      logger.error(
+        `Peer ${this.endpoint} sent nack: ${message.payload.error_code}`
+      );
+    });
+  }
+
   private createSocketDataReader() {
     // the left over data from the last received chunk
     let lastChunk = Buffer.alloc(0);
@@ -307,6 +320,12 @@ export class StacksPeer extends EventEmitter {
           this.emit(
             'pingMessageReceived',
             receivedMsg as StacksMessageEnvelope<Ping>
+          );
+          break;
+        case StacksMessageContainerTypeID.Nack:
+          this.emit(
+            'nackMessageReceived',
+            receivedMsg as StacksMessageEnvelope<Nack>
           );
           break;
       }
