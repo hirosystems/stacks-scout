@@ -1,6 +1,6 @@
 import * as net from 'node:net';
 import { EventEmitter, captureRejectionSymbol } from 'node:events';
-import { ENV, INT, logger, timeout } from './util';
+import { ENV, INT, getPeerKeyPair, getPublicIP, logger, timeout } from './util';
 import { PeerAddress } from './message/peer-address';
 import { RelayDataVec } from './message/relay-data';
 import { MessageSignature } from './message/message-signature';
@@ -9,22 +9,21 @@ import { StacksMessageEnvelope } from './message/stacks-message-envelope';
 import { ResizableByteStream } from './resizable-byte-stream';
 import { Handshake } from './message/handshake';
 import { Preamble } from './message/preamble';
-import { randomBytes } from 'node:crypto';
-import * as secp256k1 from 'secp256k1';
 import { getBtcBlockHashByHeight, getBtcChainInfo } from './bitcoin-net';
 import { StacksPeerMetrics } from './server/prometheus-server';
 import { HandshakeData } from './message/handshake-data';
 import { GetNeighbors } from './message/get-neighbors';
 import {
   StacksMessageContainerTypeID,
-  StacksMessageTypedContainer,
   StacksMessageContainerType,
 } from './stacks-p2p-deser';
 import { HandshakeAccept } from './message/handshake-accept';
-import { Neighbors } from './message/neighbors';
+import { Neighbors, NeighborsVec } from './message/neighbors';
+import { NeighborAddress } from './message/neighbor-address';
 import { Ping } from './message/ping';
 import { Pong } from './message/pong';
 import { PeerEndpoint } from './peer-endpoint';
+import { Nack } from './message/nack';
 
 // From src/core/mod.rs
 
@@ -80,16 +79,18 @@ interface StacksPeerEvents {
   handshakeAcceptMessageReceived: (
     message: StacksMessageEnvelope<HandshakeAccept>
   ) => void | Promise<void>;
+  getNeighborsMessageReceived: (
+    message: StacksMessageEnvelope<GetNeighbors>
+  ) => void | Promise<void>;
+  nackMessageReceived: (
+    message: StacksMessageEnvelope<Nack>
+  ) => void | Promise<void>;
 }
 
 export class StacksPeer extends EventEmitter {
   readonly socket: net.Socket;
   readonly direction: PeerDirection;
   readonly endpoint: PeerEndpoint;
-  /** This peer's private key */
-  readonly privKey: Buffer;
-  /** This peer's public key */
-  readonly pubKey: Buffer;
   readonly metrics: StacksPeerMetrics;
   /** epoch in milliseconds, zero for never */
   lastSeen = 0;
@@ -110,16 +111,12 @@ export class StacksPeer extends EventEmitter {
       socket.remotePort as number
     );
     this.metrics = metrics;
-    do {
-      // TODO: use a persistent key for this (stacks-scout) peer rather than this per-peer key
-      // probably set via env var
-      this.privKey = randomBytes(32);
-    } while (!secp256k1.privateKeyVerify(this.privKey));
-    this.pubKey = Buffer.from(secp256k1.publicKeyCreate(this.privKey));
     this.socket = socket;
     this.setupSocketEvents();
     this.setupPongResponder();
     this.setupHandshakeResponder();
+    this.setupNeighborsResponder();
+    this.setupNackHandler();
     this.setupPinging();
     this.once('handshakeAcceptMessageReceived', () => {
       this.handshakeCompleted = true;
@@ -232,6 +229,32 @@ export class StacksPeer extends EventEmitter {
     });
   }
 
+  private setupNeighborsResponder() {
+    this.on('getNeighborsMessageReceived', async (message) => {
+      const pubKeyHash = getPeerKeyPair().pubKeyHash.toString('hex');
+      const myIP =
+        ENV.CONTROL_PLANE_PUBLIC_HOST === 'auto'
+          ? await getPublicIP()
+          : ENV.CONTROL_PLANE_PUBLIC_HOST;
+      const selfPeerAddr = new PeerAddress(myIP);
+      const selfPort = ENV.CONTROL_PLANE_PUBLIC_PORT;
+      const neighborAddrs = [
+        new NeighborAddress(selfPeerAddr, selfPort, pubKeyHash),
+      ];
+      const neighbors = new Neighbors(new NeighborsVec(neighborAddrs));
+      const envelope = await this.createAndSignEnvelope(neighbors);
+      await this.send(envelope);
+    });
+  }
+
+  private setupNackHandler() {
+    this.on('nackMessageReceived', (message) => {
+      logger.error(
+        `Peer ${this.endpoint} sent nack: ${message.payload.error_code}`
+      );
+    });
+  }
+
   private createSocketDataReader() {
     // the left over data from the last received chunk
     let lastChunk = Buffer.alloc(0);
@@ -303,10 +326,22 @@ export class StacksPeer extends EventEmitter {
             receivedMsg as StacksMessageEnvelope<HandshakeAccept>
           );
           break;
+        case StacksMessageContainerTypeID.GetNeighbors:
+          this.emit(
+            'getNeighborsMessageReceived',
+            receivedMsg as StacksMessageEnvelope<GetNeighbors>
+          );
+          break;
         case StacksMessageContainerTypeID.Ping:
           this.emit(
             'pingMessageReceived',
             receivedMsg as StacksMessageEnvelope<Ping>
+          );
+          break;
+        case StacksMessageContainerTypeID.Nack:
+          this.emit(
+            'nackMessageReceived',
+            receivedMsg as StacksMessageEnvelope<Nack>
           );
           break;
       }
@@ -398,7 +433,7 @@ export class StacksPeer extends EventEmitter {
       new RelayDataVec([]), // No relays, we're generating this message.
       message
     );
-    envelope.sign(this.privKey);
+    envelope.sign(getPeerKeyPair().privKey);
     return envelope;
   }
 
@@ -411,7 +446,7 @@ export class StacksPeer extends EventEmitter {
       /* addrbytes */ new PeerAddress(myIP),
       /* port */ ENV.CONTROL_PLANE_PORT,
       /* services */ servicesAvailable,
-      /* node_public_key */ this.pubKey.toString('hex'),
+      /* node_public_key */ getPeerKeyPair().pubKey.toString('hex'),
       /* expire_block_height */ 1_000_000n,
       /* data_url */ ENV.DATA_PLANE_PUBLIC_URL
     );
