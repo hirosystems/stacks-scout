@@ -92,7 +92,7 @@ export function setupPeerInfoLogging(
   });
 
   peerConnections.on('peerDisconnected', (peer) => {
-    metrics.stacks_scout_connected_peers.dec();
+    metrics.stacks_scout_connected_peers.dec({ direction: peer.direction });
     peerMap.delete(peer.endpoint.ipAddress);
     logger.debug(
       {
@@ -105,7 +105,7 @@ export function setupPeerInfoLogging(
   });
 
   peerConnections.on('peerConnected', (peer) => {
-    metrics.stacks_scout_connected_peers.inc();
+    metrics.stacks_scout_connected_peers.inc({ direction: peer.direction });
     logger.debug(
       {
         event: 'peerConnected',
