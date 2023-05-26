@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { ResizableByteStream } from '../../resizable-byte-stream';
 import { Encodeable } from '../../stacks-p2p-deser';
 import { MessageVectorArray } from '../message-vector-array';
@@ -17,6 +18,7 @@ import {
   VersionedSmartContractPayload,
 } from './transaction-payload';
 import { StacksTransactionPostConditionVec } from './transaction-post-condition';
+import { logger } from '../../util';
 
 export class StacksTransaction implements Encodeable {
   /** (u8) */
@@ -36,6 +38,9 @@ export class StacksTransaction implements Encodeable {
   readonly payload_type_id: number;
   readonly payload: TransactionPayload;
 
+  /** Only available on class instances that were decoded */
+  txid: string;
+
   constructor(
     version_number: number,
     chain_id: number,
@@ -45,7 +50,8 @@ export class StacksTransaction implements Encodeable {
     post_condition_mode: number,
     post_conditions: StacksTransactionPostConditionVec,
     payload_type_id: number,
-    payload: TransactionPayload
+    payload: TransactionPayload,
+    txid: string
   ) {
     this.version_number = version_number;
     this.chain_id = chain_id;
@@ -56,9 +62,12 @@ export class StacksTransaction implements Encodeable {
     this.post_conditions = post_conditions;
     this.payload_type_id = payload_type_id;
     this.payload = payload;
+    this.txid = txid;
   }
 
   static decode(source: ResizableByteStream): StacksTransaction {
+    const byteStreamStart = source.position;
+
     const version_number = source.readUint8();
     const chain_id = source.readUint32();
     const authorization_type = source.readUint8();
@@ -90,10 +99,22 @@ export class StacksTransaction implements Encodeable {
       case 0x05:
         payload = CoinbasePayToAltPayload.decode(source);
         break;
-      default:
+      case 0x06:
         payload = VersionedSmartContractPayload.decode(source);
         break;
+      default:
+        logger.error(`Unknown tx payload type ID: ${p_type_id}`);
+        payload = new (class extends TransactionPayload {})();
+        break;
     }
+
+    // Calculate txid
+    const buff = Buffer.from(
+      source.arrayBuffer,
+      byteStreamStart,
+      source.position - byteStreamStart
+    );
+    const txid = createHash('sha512-256').update(buff).digest().toString('hex');
     return new StacksTransaction(
       version_number,
       chain_id,
@@ -103,7 +124,8 @@ export class StacksTransaction implements Encodeable {
       pc_mode,
       pc,
       p_type_id,
-      payload
+      payload,
+      txid
     );
   }
 
