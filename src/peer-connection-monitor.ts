@@ -240,11 +240,12 @@ export class PeerConnectionMonitor {
   }
 
   private monitorPeerStats(peer: StacksPeer) {
-    peer.on('handshakeAcceptMessageReceived', (msg) => {
+    peer.on('handshakeCompleted', (msg) => {
       this.updatePeerState(peer.endpoint, (peerState) => {
         peerState.lastBurnBlockHash = msg.preamble.burn_header_hash.hash;
         peerState.lastBurnBlockHeight = Number(msg.preamble.burn_block_height);
-        peerState.lastHandshakeAcceptAt = Date.now();
+        peerState.lastHandshakeAt = Date.now();
+        peerState.publicKey = peer.publicKey ?? '';
       });
     });
     peer.on('pongMessageReceived', (msg) => {
