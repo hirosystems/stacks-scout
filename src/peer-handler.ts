@@ -78,6 +78,7 @@ interface StacksPeerEvents {
   closed: (error?: Error) => void | Promise<void>;
   socketError: (error: Error) => void | Promise<void>;
   open: () => void | Promise<void>;
+  messageSent: (message: StacksMessageEnvelope) => void | Promise<void>;
   messageReceived: (message: StacksMessageEnvelope) => void | Promise<void>;
   pingMessageReceived: (
     message: StacksMessageEnvelope<Ping>
@@ -125,6 +126,10 @@ interface StacksPeerEvents {
     message: StacksMessageEnvelope<NatPunchRequest>
   ) => void | Promise<void>;
   handshakeCompleted: (message: StacksMessageEnvelope) => void | Promise<void>;
+  messageResponseDurationMeasured: (
+    messageType: 'handshake' | 'ping' | 'getNeighbors',
+    durationMs: number
+  ) => void | Promise<void>;
 }
 
 export class StacksPeer extends EventEmitter {
@@ -145,6 +150,18 @@ export class StacksPeer extends EventEmitter {
   /** Not defined until a handshake has completed */
   reportedEndpoint?: PeerEndpoint;
 
+  lastRequestMessageSent = {
+    handshake: 0,
+    ping: 0,
+    getNeighbors: 0,
+  };
+
+  lastMessageResponseTimes = {
+    handshake: undefined as number | undefined,
+    ping: undefined as number | undefined,
+    getNeighbors: undefined as number | undefined,
+  };
+
   constructor(
     socket: net.Socket,
     direction: PeerDirection,
@@ -159,6 +176,7 @@ export class StacksPeer extends EventEmitter {
     this.metrics = metrics;
     this.socket = socket;
     this.setupSocketEvents();
+    this.setupMessageDurationTimers();
     this.setupPongResponder();
     this.setupHandshakeResponder();
     this.setupNeighborsResponder();
@@ -277,6 +295,53 @@ export class StacksPeer extends EventEmitter {
         logger.error(error, 'Error pinging peer');
       }
     }
+  }
+
+  private setupMessageDurationTimers() {
+    this.on('messageSent', (msg) => {
+      switch (msg.payload.containerType) {
+        case StacksMessageContainerTypeID.Handshake:
+          this.lastRequestMessageSent.handshake = Date.now();
+          break;
+        case StacksMessageContainerTypeID.Ping:
+          this.lastRequestMessageSent.ping = Date.now();
+          break;
+        case StacksMessageContainerTypeID.GetNeighbors:
+          this.lastRequestMessageSent.getNeighbors = Date.now();
+          break;
+      }
+    });
+    this.on('messageReceived', (msg) => {
+      // messageResponseDurationMeasured
+      switch (msg.payload.containerType) {
+        case StacksMessageContainerTypeID.HandshakeAccept:
+          {
+            const duration = Date.now() - this.lastRequestMessageSent.handshake;
+            this.lastMessageResponseTimes.handshake = duration;
+            this.emit('messageResponseDurationMeasured', 'handshake', duration);
+          }
+          break;
+        case StacksMessageContainerTypeID.Pong:
+          {
+            const duration = Date.now() - this.lastRequestMessageSent.ping;
+            this.lastMessageResponseTimes.ping = duration;
+            this.emit('messageResponseDurationMeasured', 'ping', duration);
+          }
+          break;
+        case StacksMessageContainerTypeID.Neighbors:
+          {
+            const duration =
+              Date.now() - this.lastRequestMessageSent.getNeighbors;
+            this.lastMessageResponseTimes.getNeighbors = duration;
+            this.emit(
+              'messageResponseDurationMeasured',
+              'getNeighbors',
+              duration
+            );
+          }
+          break;
+      }
+    });
   }
 
   private setupPongResponder() {
@@ -649,6 +714,7 @@ export class StacksPeer extends EventEmitter {
     const byteStream = new ResizableByteStream();
     envelope.encode(byteStream);
     this.socket.write(byteStream.asBuffer(), (err) => {
+      this.emit('messageSent', envelope);
       if (err) {
         logger.error(err, 'Error sending message');
       }
