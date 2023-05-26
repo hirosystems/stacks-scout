@@ -30,6 +30,10 @@ export function setupPeerInfoLogging(
   const blockTimestampCache = new LRUCache<string, number>({
     max: 20,
   });
+  /** Microblock hash -> timestamp LRU cache for the first time a block was seen. */
+  const microblockTimestampCache = new LRUCache<string, number>({
+    max: 40,
+  });
   /** Transaction hash -> timestamp LRU cache for the first time a block was seen. */
   const transactionTimestampCache = new LRUCache<string, number>({
     max: 500,
@@ -70,6 +74,16 @@ export function setupPeerInfoLogging(
       metrics.stacks_scout_block_propagation_rate_bucket.observe(latency);
     } else {
       blockTimestampCache.set(hash, Date.now());
+    }
+  };
+
+  const observeMicroblock = (hash: string) => {
+    const firstSeenAt = microblockTimestampCache.get(hash);
+    if (firstSeenAt) {
+      const latency = Date.now() - firstSeenAt;
+      metrics.stacks_scout_microblock_propagation_rate_bucket.observe(latency);
+    } else {
+      microblockTimestampCache.set(hash, Date.now());
     }
   };
 
@@ -139,6 +153,12 @@ export function setupPeerInfoLogging(
     peer.on('blocksAvailableMessageReceived', (message) => {
       for (const block of message.payload.available) {
         observeBlock(block.consensus_hash.hash);
+      }
+    });
+
+    peer.on('microblocksAvailableMessageReceived', (message) => {
+      for (const microblock of message.payload.available) {
+        observeMicroblock(microblock.consensus_hash.hash);
       }
     });
 
