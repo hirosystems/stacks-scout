@@ -43,6 +43,7 @@ export class StacksPeerMetrics {
     this.stacks_scout_connected_peers = new prom.Gauge({
       name: 'stacks_scout_connected_peers',
       help: 'Number of connected peers',
+      labelNames: ['direction'],
     });
     this.stacks_scout_block_propagation_rate_bucket = new prom.Histogram({
       name: 'stacks_scout_block_propagation_rate_bucket',

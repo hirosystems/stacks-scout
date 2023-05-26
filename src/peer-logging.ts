@@ -5,9 +5,10 @@ import { StacksPeerMetrics } from './server/prometheus-server';
 import { ENV, logger } from './util';
 import { LRUCache } from 'lru-cache';
 
-type PeerIpAddress = string;
+type PeerId = string;
 
 interface PeerInfo {
+  ip_address: string;
   peer_version: string;
   network_id: string;
   burn_block_height: bigint;
@@ -33,21 +34,23 @@ export function setupPeerInfoLogging(
   const transactionTimestampCache = new LRUCache<string, number>({
     max: 500,
   });
-  const peerMap = new Map<PeerIpAddress, PeerInfo>();
+  const peerMap = new Map<PeerId, PeerInfo>();
 
   // Stacks peer reporting
   setInterval(() => {
-    for (const [ip, values] of peerMap) {
+    for (const [id, values] of peerMap) {
       logger.info(
-        { stacks_node_ip: ip, info: values },
+        { stacks_node_ip: values.ip_address, info: values },
         `Stacks node peer report`
       );
     }
   }, ENV.PEER_REPORT_INTERVAL_MS);
 
   const observePeer = (peer: StacksPeer, message: StacksMessageEnvelope) => {
-    if (!peerMap.has(peer.endpoint.ipAddress)) {
-      peerMap.set(peer.endpoint.ipAddress, {
+    const peerId = `${peer.endpoint.ipAddress}_${peer.publicKey ?? ''}`;
+    if (!peerMap.has(peerId)) {
+      peerMap.set(peerId, {
+        ip_address: peer.endpoint.ipAddress,
         peer_version: u32HexString(message.preamble.peer_version),
         network_id: u32HexString(message.preamble.network_id),
         burn_block_height: message.preamble.burn_block_height,
@@ -89,7 +92,7 @@ export function setupPeerInfoLogging(
   });
 
   peerConnections.on('peerDisconnected', (peer) => {
-    metrics.stacks_scout_connected_peers.dec();
+    metrics.stacks_scout_connected_peers.dec({ direction: peer.direction });
     peerMap.delete(peer.endpoint.ipAddress);
     logger.debug(
       {
@@ -102,7 +105,7 @@ export function setupPeerInfoLogging(
   });
 
   peerConnections.on('peerConnected', (peer) => {
-    metrics.stacks_scout_connected_peers.inc();
+    metrics.stacks_scout_connected_peers.inc({ direction: peer.direction });
     logger.debug(
       {
         event: 'peerConnected',
