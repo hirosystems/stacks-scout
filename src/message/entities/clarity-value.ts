@@ -95,7 +95,7 @@ export class ClarityTuple implements Encodeable {
     const len = source.readUint32();
     const content: Record<string, ClarityValue> = {};
     for (let i = 0; i < len; i++) {
-      const nameLen = source.readUint32();
+      const nameLen = source.readUint8();
       const nameVal = source.readBytesAsBuffer(nameLen).toString('ascii');
       const keyVal = ClarityValue.decode(source);
       content[nameVal] = keyVal;
