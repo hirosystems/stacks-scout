@@ -142,6 +142,9 @@ export class StacksPeer extends EventEmitter {
   /** Not defined until a handshake has completed */
   publicKey?: string;
 
+  /** Not defined until a handshake has completed */
+  reportedEndpoint?: PeerEndpoint;
+
   constructor(
     socket: net.Socket,
     direction: PeerDirection,
@@ -169,12 +172,20 @@ export class StacksPeer extends EventEmitter {
     this.once('handshakeAcceptMessageReceived', (msg) => {
       this.handshakeCompleted = true;
       this.publicKey = msg.payload.handshake.node_public_key;
+      this.reportedEndpoint = new PeerEndpoint(
+        msg.payload.handshake.addrbytes.ip_address,
+        msg.payload.handshake.port
+      );
       this.emit('handshakeCompleted', msg);
     });
     // Typically we get this handshake message for inbound nodes where they initiated the handshake
     this.once('handshakeMessageReceived', (msg) => {
       this.handshakeCompleted = true;
       this.publicKey = msg.payload.data.node_public_key;
+      this.reportedEndpoint = new PeerEndpoint(
+        msg.payload.data.addrbytes.ip_address,
+        msg.payload.data.port
+      );
       this.emit('handshakeCompleted', msg);
     });
   }
