@@ -2,7 +2,7 @@ import { RegtestBitcoinNet } from './bitcoin-net';
 import { startControlPlaneServer } from './server/p2p-control-plane-server';
 import { StacksPeer } from './peer-handler';
 import { setupShutdownHandler } from './shutdown';
-import { getDefaultStacksNodePeerAddress } from './stacks-p2p';
+import { getBootstrapPeers } from './stacks-p2p';
 import { waitForRpcResponsive } from './stacks-rpc';
 import { ENV, logger, timeout } from './util';
 import { startDataPlaneServer } from './server/p2p-data-plane-server';
@@ -32,8 +32,11 @@ async function init() {
   peerConnections.startPeriodicReconnecting();
   peerConnections.startPeerNeighborScanning();
 
-  const defaultPeerEndpoint = await getDefaultStacksNodePeerAddress();
-  peerConnections.registerPeerEndpoint(defaultPeerEndpoint);
+  const bootstrapEndpoints = await getBootstrapPeers();
+  for (const endpoint of bootstrapEndpoints) {
+    peerConnections.registerPeerEndpoint(endpoint);
+  }
+
   peerConnections.loadPeersFromStorage();
 }
 
