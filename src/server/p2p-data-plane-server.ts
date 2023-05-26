@@ -3,7 +3,7 @@ import { ENV, logger } from '../util';
 import { getStacksNodeInfo } from '../stacks-rpc';
 import { StacksPeerMetrics } from './prometheus-server';
 
-export async function startDataPlaneServer(metrics: StacksPeerMetrics) {
+export async function startDataPlaneServer() {
   const server = fastify({ logger });
 
   /*

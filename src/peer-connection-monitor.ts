@@ -130,17 +130,15 @@ export class PeerConnectionMonitor {
     neighbors.payload.neighbors.forEach((neighbor) => {
       const endpoint = new PeerEndpoint(
         neighbor.addrbytes.ip_address,
-        neighbor.port
+        neighbor.port,
+        neighbor.public_key_hash
       );
       PeerConnectionMonitor.instance.registerPeerEndpoint(endpoint);
     });
   }
 
   private connectToPeer(peerEndpoint: PeerEndpoint): void {
-    const connectionPromise = StacksPeer.connectOutbound(
-      peerEndpoint,
-      StacksPeerMetrics.instance
-    )
+    const connectionPromise = StacksPeer.connectOutbound(peerEndpoint)
       .then((peer) => {
         this.connectedPeers.set(peerEndpoint, peer);
         peer.on('closed', () => {

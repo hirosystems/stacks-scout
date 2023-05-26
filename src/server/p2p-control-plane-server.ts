@@ -4,11 +4,11 @@ import { logger, ENV } from '../util';
 import { StacksPeerMetrics } from './prometheus-server';
 import { PeerConnectionMonitor } from '../peer-connection-monitor';
 
-export async function startControlPlaneServer(metrics: StacksPeerMetrics) {
+export async function startControlPlaneServer() {
   const server = net.createServer();
 
   server.on('connection', (socket) => {
-    handleNewInboundSocket(socket, metrics).catch((error) => {
+    handleNewInboundSocket(socket).catch((error) => {
       logger.error(error, 'Error handling new control-plane socket connection');
     });
   });
@@ -39,13 +39,10 @@ export async function startControlPlaneServer(metrics: StacksPeerMetrics) {
   return server;
 }
 
-async function handleNewInboundSocket(
-  socket: net.Socket,
-  metrics: StacksPeerMetrics
-) {
+async function handleNewInboundSocket(socket: net.Socket) {
   const socketAddr = `${socket.remoteAddress}:${socket.remotePort}`;
   logger.info(`New control-plane inbound socket connection from ${socketAddr}`);
-  const peer = new StacksPeer(socket, PeerDirection.Inbound, metrics);
+  const peer = new StacksPeer(socket, PeerDirection.Inbound);
   PeerConnectionMonitor.instance.registerConnectedPeer(peer);
   await peer.performHandshake();
   logger.info(`Handshake accepted from inbound peer ${socketAddr}`);

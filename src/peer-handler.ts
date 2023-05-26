@@ -9,7 +9,6 @@ import { StacksMessageEnvelope } from './message/stacks-message-envelope';
 import { ResizableByteStream } from './resizable-byte-stream';
 import { Handshake } from './message/handshake';
 import { Preamble } from './message/preamble';
-import { StacksPeerMetrics } from './server/prometheus-server';
 import { HandshakeData } from './message/handshake-data';
 import { GetNeighbors } from './message/get-neighbors';
 import {
@@ -130,7 +129,6 @@ export class StacksPeer extends EventEmitter {
   readonly socket: net.Socket;
   readonly direction: PeerDirection;
   readonly endpoint: PeerEndpoint;
-  readonly metrics: StacksPeerMetrics;
   /** epoch in milliseconds, zero for never */
   lastSeen = 0;
 
@@ -141,15 +139,15 @@ export class StacksPeer extends EventEmitter {
   constructor(
     socket: net.Socket,
     direction: PeerDirection,
-    metrics: StacksPeerMetrics
+    public_key_hash: string
   ) {
     super({ captureRejections: true });
     this.direction = direction;
     this.endpoint = new PeerEndpoint(
       socket.remoteAddress as string,
-      socket.remotePort as number
+      socket.remotePort as number,
+      public_key_hash
     );
-    this.metrics = metrics;
     this.socket = socket;
     this.setupSocketEvents();
     this.setupPongResponder();
@@ -633,8 +631,7 @@ export class StacksPeer extends EventEmitter {
   }
 
   public static async connectOutbound(
-    address: PeerEndpoint,
-    metrics: StacksPeerMetrics
+    address: PeerEndpoint
   ): Promise<StacksPeer> {
     const socket = await new Promise<net.Socket>((resolve, reject) => {
       const socket = net.createConnection({
@@ -654,7 +651,11 @@ export class StacksPeer extends EventEmitter {
       socket.once('error', onError);
     });
 
-    const peer = new this(socket, PeerDirection.Outbound, metrics);
+    const peer = new this(
+      socket,
+      PeerDirection.Outbound,
+      address.public_key_hash
+    );
     logger.info(`Connected to Stacks peer: ${peer.endpoint}`);
 
     return peer;

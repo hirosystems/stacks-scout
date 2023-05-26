@@ -21,12 +21,12 @@ async function init() {
     await RegtestBitcoinNet.instance.waitForBtcRestResponsive();
   }
 
-  const metrics = StacksPeerMetrics.instance;
-  await startDataPlaneServer(metrics);
-  await startControlPlaneServer(metrics);
+  await startDataPlaneServer();
+  await startControlPlaneServer();
   await startPrometheusServer();
 
   const peerConnections = PeerConnectionMonitor.instance;
+  const metrics = StacksPeerMetrics.instance;
   setupPeerInfoLogging(peerConnections, metrics);
 
   peerConnections.startPeriodicReconnecting();

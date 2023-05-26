@@ -10,6 +10,7 @@ type PeerIpAddress = string;
 interface PeerInfo {
   peer_version: string;
   network_id: string;
+  public_key_hash: string;
   burn_block_height: bigint;
   port: number;
 }
@@ -50,6 +51,7 @@ export function setupPeerInfoLogging(
         peer_version: u32HexString(message.preamble.peer_version),
         network_id: u32HexString(message.preamble.network_id),
         burn_block_height: message.preamble.burn_block_height,
+        public_key_hash: peer.endpoint.public_key_hash,
         port: peer.endpoint.port,
       });
       metrics.stacks_scout_version.inc({

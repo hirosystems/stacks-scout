@@ -1,7 +1,7 @@
 import * as net from 'node:net';
 import * as dns from 'node:dns/promises';
 import { PeerEndpoint } from './peer-endpoint';
-import { ENV } from './util';
+import { ENV, getPeerKeyPair } from './util';
 
 export async function getDefaultStacksNodePeerAddress() {
   let hostIP = ENV.STACKS_NODE_P2P_HOST;
@@ -10,5 +10,9 @@ export async function getDefaultStacksNodePeerAddress() {
     const res = await dns.resolve4(hostIP);
     hostIP = res[0];
   }
-  return new PeerEndpoint(hostIP, ENV.STACKS_NODE_P2P_PORT);
+  return new PeerEndpoint(
+    hostIP,
+    ENV.STACKS_NODE_P2P_PORT,
+    getPeerKeyPair().pubKeyHash.toString('hex')
+  );
 }
