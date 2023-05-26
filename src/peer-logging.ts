@@ -12,6 +12,7 @@ interface PeerInfo {
   network_id: string;
   burn_block_height: bigint;
   port: number;
+  public_key?: string;
 }
 
 function u32HexString(peer_version: number): string {
@@ -51,6 +52,7 @@ export function setupPeerInfoLogging(
         network_id: u32HexString(message.preamble.network_id),
         burn_block_height: message.preamble.burn_block_height,
         port: peer.endpoint.port,
+        public_key: peer.publicKey,
       });
       metrics.stacks_scout_version.inc({
         version: u32HexString(message.preamble.peer_version),
@@ -110,7 +112,7 @@ export function setupPeerInfoLogging(
       `Peer ${peer.endpoint} connected`
     );
 
-    peer.on('handshakeAcceptMessageReceived', (message) => {
+    peer.on('handshakeCompleted', (message) => {
       observePeer(peer, message);
       logger.debug(
         {
