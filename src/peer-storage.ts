@@ -6,13 +6,14 @@ import { ENV } from './util';
 
 export class PeerState {
   endpoint: PeerEndpoint;
-  lastHandshakeAcceptAt = 0;
+  lastHandshakeAt = 0;
   lastPongReceivedAt = 0;
   lastBlockHeight = 0;
   lastBlockHash = '';
   lastBurnBlockHeight = 0;
   lastBurnBlockHash = '';
   registeredAt = 0;
+  publicKey = '';
 
   constructor(endpoint: PeerEndpoint) {
     this.endpoint = endpoint;

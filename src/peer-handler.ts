@@ -124,6 +124,7 @@ interface StacksPeerEvents {
   natPunchRequestMessageReceived: (
     message: StacksMessageEnvelope<NatPunchRequest>
   ) => void | Promise<void>;
+  handshakeCompleted: (message: StacksMessageEnvelope) => void | Promise<void>;
 }
 
 export class StacksPeer extends EventEmitter {
@@ -137,6 +138,9 @@ export class StacksPeer extends EventEmitter {
   lastMessageSeqNumber = 0;
 
   handshakeCompleted = false;
+
+  /** Not defined until a handshake has completed */
+  publicKey?: string;
 
   constructor(
     socket: net.Socket,
@@ -160,8 +164,18 @@ export class StacksPeer extends EventEmitter {
     this.setupNatPunchRequestResponder();
     this.setupNackHandler();
     this.setupPinging();
-    this.once('handshakeAcceptMessageReceived', () => {
+
+    // Typically we get this accept message for outbound node where we initiated the handshake
+    this.once('handshakeAcceptMessageReceived', (msg) => {
       this.handshakeCompleted = true;
+      this.publicKey = msg.payload.handshake.node_public_key;
+      this.emit('handshakeCompleted', msg);
+    });
+    // Typically we get this handshake message for inbound nodes where they initiated the handshake
+    this.once('handshakeMessageReceived', (msg) => {
+      this.handshakeCompleted = true;
+      this.publicKey = msg.payload.data.node_public_key;
+      this.emit('handshakeCompleted', msg);
     });
   }
 
