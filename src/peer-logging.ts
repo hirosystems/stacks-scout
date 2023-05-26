@@ -72,7 +72,7 @@ export function setupPeerInfoLogging(
     const firstSeenAt = transactionTimestampCache.get(hash);
     if (firstSeenAt) {
       const latency = Date.now() - firstSeenAt;
-      metrics.stacks_scout_block_propagation_rate_bucket.observe(latency);
+      metrics.stacks_scout_mempool_propagation_rate_bucket.observe(latency);
     } else {
       transactionTimestampCache.set(hash, Date.now());
     }
