@@ -1,9 +1,10 @@
 import { ResizableByteStream } from '../../resizable-byte-stream';
 import { Encodeable } from '../../stacks-p2p-deser';
+import { logger } from '../../util';
 import { MessageVectorArray } from '../message-vector-array';
 import { ContractPrincipal, Principal, StandardPrincipal } from './principal';
 
-type ClarityValueType = string | Principal | ClarityValue;
+type ClarityValueType = string | bigint | Principal | ClarityValue;
 
 export class ClarityValue implements Encodeable {
   readonly type_id: number;
@@ -19,11 +20,22 @@ export class ClarityValue implements Encodeable {
     let content: ClarityValueType;
     switch (type_id) {
       case 0x00: // 0x00: 128-bit signed integer
+        {
+          // parse two's complement integer
+          const hex = source.readBytesAsHexString(16);
+          const bigIntVal = BigInt('0x' + hex);
+          content =
+            parseInt(hex[0], 16) >= 8 ? -(~bigIntVal + BigInt(1)) : bigIntVal;
+        }
+        break;
       case 0x01: // 0x01: 128-bit unsigned integer
-        content = source.readBytesAsHexString(128);
+        content = BigInt('0x' + source.readBytesAsHexString(16));
         break;
       case 0x02: // 0x02: buffer
-        content = source.readBytesAsHexString(4);
+        {
+          const buffLen = source.readUint32();
+          content = source.readBytesAsHexString(buffLen);
+        }
         break;
       case 0x03: // 0x03: boolean true
       case 0x04: // 0x04: boolean false
@@ -58,6 +70,7 @@ export class ClarityValue implements Encodeable {
         content = ClarityStringUtf8.decode(source);
         break;
       default:
+        logger.warn(`Unknown Clarity type ID: ${type_id}`);
         content = '';
         break;
     }
@@ -71,16 +84,22 @@ export class ClarityValue implements Encodeable {
 
 export class ClarityTuple implements Encodeable {
   readonly len: number;
-  readonly content: string;
+  readonly content: Record<string, ClarityValue>;
 
-  constructor(len: number, content: string) {
+  constructor(len: number, content: Record<string, ClarityValue>) {
     this.len = len;
     this.content = content;
   }
 
   static decode(source: ResizableByteStream): ClarityTuple {
     const len = source.readUint32();
-    const content = source.readBytesAsHexString(len);
+    const content: Record<string, ClarityValue> = {};
+    for (let i = 0; i < len; i++) {
+      const nameLen = source.readUint32();
+      const nameVal = source.readBytesAsBuffer(nameLen).toString('ascii');
+      const keyVal = ClarityValue.decode(source);
+      content[nameVal] = keyVal;
+    }
     return new ClarityTuple(len, content);
   }
 
@@ -100,7 +119,7 @@ export class ClarityStringAscii implements Encodeable {
 
   static decode(source: ResizableByteStream): ClarityStringAscii {
     const len = source.readUint32();
-    const content = source.readBytesAsHexString(len);
+    const content = source.readBytesAsBuffer(len).toString('ascii');
     return new ClarityStringAscii(len, content);
   }
 
@@ -120,7 +139,7 @@ export class ClarityStringUtf8 implements Encodeable {
 
   static decode(source: ResizableByteStream): ClarityStringUtf8 {
     const len = source.readUint32();
-    const content = source.readBytesAsHexString(len);
+    const content = source.readBytesAsBuffer(len).toString('utf8');
     return new ClarityStringUtf8(len, content);
   }
 

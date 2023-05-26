@@ -26,16 +26,20 @@ export class TokenTransferPayload extends TransactionPayload {
   readonly recipient_principal: Principal;
   /** An 8-byte number denominating the number of microSTX to send to the recipient address's account. */
   readonly amount: bigint;
+  // 34-byte memo field
+  readonly memo: string;
 
   constructor(
     recipient_type: number,
     recipient_principal: Principal,
-    amount: bigint
+    amount: bigint,
+    memo: string
   ) {
     super();
     this.recipient_type = recipient_type;
     this.recipient_principal = recipient_principal;
     this.amount = amount;
+    this.memo = memo;
   }
 
   static decode(source: ResizableByteStream): TokenTransferPayload {
@@ -49,7 +53,8 @@ export class TokenTransferPayload extends TransactionPayload {
     return new TokenTransferPayload(
       recipient_type,
       principal,
-      source.readUint64()
+      source.readUint64(),
+      source.readBytesAsHexString(34)
     );
   }
 }
@@ -108,7 +113,9 @@ export class ContractCallPayload extends TransactionPayload {
   static decode(source: ResizableByteStream): ContractCallPayload {
     const principal = ContractPrincipal.decode(source);
     const function_name_length = source.readUint8();
-    const function_name = source.readBytesAsHexString(function_name_length);
+    const function_name = source
+      .readBytesAsBuffer(function_name_length)
+      .toString('ascii');
     return new ContractCallPayload(
       principal,
       function_name_length,

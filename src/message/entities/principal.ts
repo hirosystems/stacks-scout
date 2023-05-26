@@ -40,7 +40,10 @@ export class ContractName implements Encodeable {
 
   static decode(source: ResizableByteStream): ContractName {
     const len = source.readUint8();
-    return new ContractName(len, source.readBytesAsHexString(len));
+    return new ContractName(
+      len,
+      source.readBytesAsBuffer(len).toString('ascii')
+    );
   }
 
   encode(target: ResizableByteStream): void {

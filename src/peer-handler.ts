@@ -363,6 +363,7 @@ export class StacksPeer extends EventEmitter {
         // check if message deserialization read the expected length
         if (byteStream.position < payloadLength + Preamble.BYTE_SIZE) {
           logger.error(
+            receivedMsg.payload,
             `Message deserialization error: payload ${
               receivedMsg.payload.constructor.name
             } is expected to be ${payloadLength} bytes, but only ${
