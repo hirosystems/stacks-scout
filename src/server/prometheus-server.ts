@@ -47,17 +47,17 @@ export class StacksPeerMetrics {
     this.stacks_scout_block_propagation_rate_bucket = new prom.Histogram({
       name: 'stacks_scout_block_propagation_rate_bucket',
       help: 'Rate at which blocks propagate across the configured network',
-      buckets: prom.exponentialBuckets(1, 2, 10),
+      buckets: prom.exponentialBuckets(100, 2, 10),
     });
     this.stacks_scout_microblock_propagation_rate_bucket = new prom.Histogram({
       name: 'stacks_scout_microblock_propagation_rate_bucket',
       help: 'Rate at which microblocks propagate across the configured network',
-      buckets: prom.exponentialBuckets(1, 2, 10),
+      buckets: prom.exponentialBuckets(100, 2, 10),
     });
     this.stacks_scout_mempool_propagation_rate_bucket = new prom.Histogram({
       name: 'stacks_scout_mempool_propagation_rate_bucket',
       help: 'Rate at which mempool transactions propagate across the configured network',
-      buckets: prom.exponentialBuckets(1, 2, 10),
+      buckets: prom.exponentialBuckets(100, 2, 10),
     });
     this.stacks_scout_mempool_inclusion_rate_bucket = new prom.Histogram({
       name: 'stacks_scout_mempool_inclusion_rate_bucket',
