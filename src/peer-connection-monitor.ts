@@ -1,4 +1,5 @@
 import { EventEmitter, captureRejectionSymbol } from 'node:events';
+import * as ip from 'ip';
 import { ENV, logger } from './util';
 import { StacksPeerMetrics } from './server/prometheus-server';
 import { StacksPeer } from './peer-handler';
@@ -10,6 +11,9 @@ interface PeerConnectionMonitorEvents {
   peerConnected(peer: StacksPeer): void | Promise<void>;
   peerDisconnected(peer: StacksPeer): void | Promise<void>;
 }
+
+const IPv4_UNSPECIFIED_ADDRESS = '0.0.0.0';
+const IPv6_UNSPECIFIED_ADDRESS = '0000:0000:0000:0000:0000:0000:0000:0000';
 
 export class PeerConnectionMonitor {
   readonly knownPeers = new Set<PeerEndpoint>();
@@ -189,6 +193,18 @@ export class PeerConnectionMonitor {
   }
 
   public registerPeerEndpoint(peerEndpoint: PeerEndpoint) {
+    // ignore private IP addresses (but allow loopback address for local connections)
+    if (
+      (ip.isPrivate(peerEndpoint.ipAddress) &&
+        !ip.isLoopback(peerEndpoint.ipAddress)) ||
+      peerEndpoint.ipAddress === IPv4_UNSPECIFIED_ADDRESS ||
+      peerEndpoint.ipAddress === IPv6_UNSPECIFIED_ADDRESS
+    ) {
+      logger.debug(
+        `Ignoring peer with private IP address: ${peerEndpoint.ipAddress}`
+      );
+      return;
+    }
     if (!this.knownPeers.has(peerEndpoint)) {
       this.knownPeers.add(peerEndpoint);
       this.emit('peerEndpointDiscovered', peerEndpoint);
@@ -244,6 +260,16 @@ export class PeerConnectionMonitor {
         peerState.lastBurnBlockHash = msg.preamble.burn_header_hash.hash;
         peerState.lastBurnBlockHeight = Number(msg.preamble.burn_block_height);
         peerState.lastBlockHash = blockHash;
+      });
+    });
+    peer.on('messageReceived', (msg) => {
+      // Register any relayers as possible peers
+      msg.relayers.forEach((relayer) => {
+        const relayerEndpoint = new PeerEndpoint(
+          relayer.peer.addrbytes.ip_address,
+          relayer.peer.port
+        );
+        this.registerPeerEndpoint(relayerEndpoint);
       });
     });
   }
