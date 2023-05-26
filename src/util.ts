@@ -96,6 +96,13 @@ const schema = Type.Object({
   STACKS_NODE_P2P_HOST: Type.String({ default: '127.0.0.1' }),
   STACKS_NODE_P2P_PORT: Type.Number({ default: 20444 }),
 
+  STACKS_NODE_P2P_BOOTSTRAPS: Type.Optional(
+    Type.String({
+      description:
+        'Endpoints in the form of `host:port` separated by commas. Used for bootstrapping initial peer connections',
+    })
+  ),
+
   STACKS_NETWORK_NAME: Type.Union([
     Type.Literal('mainnet'),
     Type.Literal('testnet'),
