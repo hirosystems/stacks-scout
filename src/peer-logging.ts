@@ -167,5 +167,13 @@ export function setupPeerInfoLogging(
     peer.on('transactionMessageReceived', (message) => {
       observeTransaction(message.payload.transaction.txid);
     });
+
+    peer.on('messageResponseDurationMeasured', (messageType, durationMs) => {
+      // TODO: what to log?
+      logger.info(
+        { peer: peer.endpoint.toString(), messageType, durationMs },
+        `Peer took ${durationMs}ms to respond to ${messageType}`
+      );
+    });
   });
 }
