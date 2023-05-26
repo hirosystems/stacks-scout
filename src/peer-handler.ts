@@ -168,6 +168,10 @@ export class StacksPeer extends EventEmitter {
     this.setupNackHandler();
     this.setupPinging();
 
+    this.on('messageReceived', (msg) => {
+      this.lastSeen = Date.now();
+    });
+
     // Typically we get this accept message for outbound node where we initiated the handshake
     this.once('handshakeAcceptMessageReceived', (msg) => {
       this.handshakeCompleted = true;

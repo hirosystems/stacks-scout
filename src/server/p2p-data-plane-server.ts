@@ -2,30 +2,49 @@ import fastify from 'fastify';
 import { ENV, logger } from '../util';
 import { getStacksNodeInfo } from '../stacks-rpc';
 import { StacksPeerMetrics } from './prometheus-server';
+import { PeerConnectionMonitor } from '../peer-connection-monitor';
 
 export async function startDataPlaneServer(metrics: StacksPeerMetrics) {
   const server = fastify({ logger });
-
-  /*
-  server.get('/', async (request, reply) => {
-    const btcInfo = await getBitcoinChainInfo();
-    const stxInfo = await getStacksNodeInfo();
-    return {
-      btcInfo,
-      stxInfo,
-    };
-  });
-  */
 
   server.route({
     url: '*',
     method: ['GET', 'POST', 'HEAD', 'PUT'],
     handler: async (request, reply) => {
-      const stxInfo = await getStacksNodeInfo();
-      return {
-        stxInfo,
-      };
+      return reply.redirect('/status');
     },
+  });
+
+  server.get('/status', async (request, reply) => {
+    const connectionsInProgress = [
+      ...PeerConnectionMonitor.instance.connectionsInProgress.keys(),
+    ].map((k) => k.toString());
+    const connectedPeers = [
+      ...PeerConnectionMonitor.instance.connectedPeers,
+    ].map(([_, p]) => {
+      return {
+        endpoint: p.endpoint.toString(),
+        reported_endpoint: p.reportedEndpoint?.toString() ?? null,
+        public_key: p.publicKey ?? null,
+        direction: p.direction,
+        last_seen: new Date(p.lastSeen).toISOString(),
+        last_seen_seconds_ago: Math.round((Date.now() - p.lastSeen) / 1000),
+      };
+    });
+    const knownPeers = [...PeerConnectionMonitor.instance.knownPeers].map((p) =>
+      p.toString()
+    );
+    const replyJson = JSON.stringify(
+      {
+        status: 'ok',
+        connectedPeers,
+        connectionsInProgress,
+        knownPeers,
+      },
+      null,
+      2
+    );
+    reply.type('application/json').send(replyJson);
   });
 
   const addr = await server.listen({
