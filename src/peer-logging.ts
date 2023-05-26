@@ -1,4 +1,6 @@
+import { StacksMessageEnvelope } from './message/stacks-message-envelope';
 import { PeerConnectionMonitor } from './peer-connection-monitor';
+import { StacksPeer } from './peer-handler';
 import { StacksPeerMetrics } from './server/prometheus-server';
 import { ENV, logger } from './util';
 import { LRUCache } from 'lru-cache';
@@ -32,6 +34,7 @@ export function setupPeerInfoLogging(
   });
   const peerMap = new Map<PeerIpAddress, PeerInfo>();
 
+  // Stacks peer reporting
   setInterval(() => {
     for (const [ip, values] of peerMap) {
       logger.info(
@@ -40,6 +43,30 @@ export function setupPeerInfoLogging(
       );
     }
   }, ENV.PEER_REPORT_INTERVAL_MS);
+
+  const observePeer = (peer: StacksPeer, message: StacksMessageEnvelope) => {
+    if (!peerMap.has(peer.endpoint.ipAddress)) {
+      peerMap.set(peer.endpoint.ipAddress, {
+        peer_version: u32HexString(message.preamble.peer_version),
+        network_id: u32HexString(message.preamble.network_id),
+        burn_block_height: message.preamble.burn_block_height,
+        port: peer.endpoint.port,
+      });
+      metrics.stacks_scout_version.inc({
+        version: u32HexString(message.preamble.peer_version),
+      });
+    }
+  };
+
+  const observeBlock = (hash: string) => {
+    const firstSeenAt = blockTimestampCache.get(hash);
+    if (firstSeenAt) {
+      const latency = Date.now() - firstSeenAt;
+      metrics.stacks_scout_block_propagation_rate_bucket.observe(latency);
+    } else {
+      blockTimestampCache.set(hash, Date.now());
+    }
+  };
 
   peerConnections.on('peerEndpointDiscovered', (peerEndpoint) => {
     metrics.stacks_scout_discovered_nodes.inc();
@@ -74,17 +101,7 @@ export function setupPeerInfoLogging(
     );
 
     peer.on('handshakeAcceptMessageReceived', (message) => {
-      if (!peerMap.has(peer.endpoint.ipAddress)) {
-        peerMap.set(peer.endpoint.ipAddress, {
-          peer_version: u32HexString(message.preamble.peer_version),
-          network_id: u32HexString(message.preamble.network_id),
-          burn_block_height: message.preamble.burn_block_height,
-          port: peer.endpoint.port,
-        });
-        metrics.stacks_scout_version.inc({
-          version: u32HexString(message.preamble.peer_version),
-        });
-      }
+      observePeer(peer, message);
       logger.debug(
         {
           event: 'peerHandshakeAccepted',
@@ -104,20 +121,14 @@ export function setupPeerInfoLogging(
       );
     });
 
-    peer.on('blocksMessageReceived', (message) => {
-      for (const block of message.payload.blocks) {
-        const hash = block.stacks_block.getBlockHash();
-        const firstSeenAt = blockTimestampCache.get(hash);
-        if (firstSeenAt) {
-          const latency = Date.now() - firstSeenAt;
-          metrics.stacks_scout_block_propagation_rate_bucket.observe(latency);
-        } else {
-          blockTimestampCache.set(hash, Date.now());
-        }
+    peer.on('blocksAvailableMessageReceived', (message) => {
+      for (const block of message.payload.available) {
+        observeBlock(block.consensus_hash.hash);
       }
     });
 
     peer.on('transactionMessageReceived', (message) => {
+      // TODO: Hash the entire transaction to generate a hash and measure latency.
       // const hash = 'message.payload.transaction.';
       // const firstSeenAt = transactionTimestampCache.get(hash);
       // if (firstSeenAt) {
