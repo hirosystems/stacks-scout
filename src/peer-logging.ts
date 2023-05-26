@@ -68,6 +68,16 @@ export function setupPeerInfoLogging(
     }
   };
 
+  const observeTransaction = (hash: string) => {
+    const firstSeenAt = transactionTimestampCache.get(hash);
+    if (firstSeenAt) {
+      const latency = Date.now() - firstSeenAt;
+      metrics.stacks_scout_block_propagation_rate_bucket.observe(latency);
+    } else {
+      transactionTimestampCache.set(hash, Date.now());
+    }
+  };
+
   peerConnections.on('peerEndpointDiscovered', (peerEndpoint) => {
     metrics.stacks_scout_discovered_nodes.inc();
     logger.debug(
@@ -128,15 +138,7 @@ export function setupPeerInfoLogging(
     });
 
     peer.on('transactionMessageReceived', (message) => {
-      // TODO: Hash the entire transaction to generate a hash and measure latency.
-      // const hash = 'message.payload.transaction.';
-      // const firstSeenAt = transactionTimestampCache.get(hash);
-      // if (firstSeenAt) {
-      //   const latency = Date.now() - firstSeenAt;
-      //   metrics.stacks_scout_mempool_propagation_rate_bucket.observe(latency);
-      // } else {
-      //   blockTimestampCache.set(hash, Date.now());
-      // }
+      observeTransaction(message.payload.transaction.txid);
     });
   });
 }
