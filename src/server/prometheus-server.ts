@@ -74,7 +74,8 @@ export class StacksPeerMetrics {
       new prom.Histogram({
         name: 'stacks_scout_node_request_duration_milliseconds_bucket',
         help: 'Stacks node latency in milliseconds',
-        buckets: prom.exponentialBuckets(1, 2, 10),
+        buckets: prom.exponentialBuckets(10, 2, 10),
+        labelNames: ['message'],
       });
   }
 }

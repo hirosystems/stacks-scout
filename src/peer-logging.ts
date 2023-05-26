@@ -169,8 +169,11 @@ export function setupPeerInfoLogging(
     });
 
     peer.on('messageResponseDurationMeasured', (messageType, durationMs) => {
-      // TODO: what to log?
-      logger.info(
+      metrics.stacks_scout_node_request_duration_milliseconds_bucket.observe(
+        { message: messageType },
+        durationMs
+      );
+      logger.debug(
         { peer: peer.endpoint.toString(), messageType, durationMs },
         `Peer took ${durationMs}ms to respond to ${messageType}`
       );
