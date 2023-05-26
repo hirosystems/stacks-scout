@@ -14,6 +14,7 @@ interface PeerInfo {
   burn_block_height: bigint;
   port: number;
   public_key?: string;
+  reported_endpoint?: string;
 }
 
 function u32HexString(peer_version: number): string {
@@ -60,6 +61,7 @@ export function setupPeerInfoLogging(
         burn_block_height: message.preamble.burn_block_height,
         port: peer.endpoint.port,
         public_key: peer.publicKey,
+        reported_endpoint: peer.reportedEndpoint?.toString() ?? '',
       });
       metrics.stacks_scout_version.inc({
         version: u32HexString(message.preamble.peer_version),
