@@ -46,7 +46,8 @@ export class PeerEndpoint {
     let ipAddress: string;
     let port: string;
     if (str.startsWith('[')) {
-      [ipAddress, port] = str.split(']:');
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      [ipAddress, port] = str.match(/^\[(.*)\]:(\d+)$/)!.slice(1);
     } else {
       [ipAddress, port] = str.split(':');
     }

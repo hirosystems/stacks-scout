@@ -41,6 +41,6 @@ async function init() {
 }
 
 init().catch((error) => {
-  logger.error(error, 'Init failed: ${error}');
+  logger.error(error, `Init failed: ${error}`);
   process.exit(1);
 });

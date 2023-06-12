@@ -7,6 +7,15 @@ it('socket address', () => {
   expect(addr1).toBe(addr2);
 });
 
+it('IPv6 endpoint parsing', () => {
+  const endpointStr = '[0000:8000:0000:0104:0000:0004:0000:8000]:20444';
+  const peerEndpoint = PeerEndpoint.fromString(endpointStr);
+  expect(peerEndpoint.ipAddress).toEqual(
+    '0000:8000:0000:0104:0000:0004:0000:8000'
+  );
+  expect(peerEndpoint.port).toEqual(20444);
+});
+
 it('timeout should reject when aborted with reason', async () => {
   const abortController = new AbortController();
   const abortError = new Error('test abort');
